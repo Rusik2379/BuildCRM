@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title }} · BuildCRM</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script defer src="/static/app.js"></script>
+</head>
+<body>
+<div class="app-shell">
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-mark">BC</div>
+            <div>
+                <strong>BuildCRM</strong>
+                <span>Управление стройкой</span>
+            </div>
+        </div>
+
+        <nav class="sidebar-nav">
+            <a href="/dashboard" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}">Панель</a>
+            <a href="/clients-page" class="nav-link {% if active_page == 'clients' %}active{% endif %}">Клиенты</a>
+            <a href="/products-page" class="nav-link {% if active_page == 'products' %}active{% endif %}">Номенклатура</a>
+            <a href="/requests-page" class="nav-link {% if active_page == 'requests' %}active{% endif %}">Заказы</a>
+            <a href="/docs" class="nav-link">API</a>
+        </nav>
+    </aside>
+
+    <main class="main-area">
+        <header class="topbar">
+            <div>
+                <h1>{{ page_title }}</h1>
+            </div>
+        </header>
+
+        {% block content %}{% endblock %}
+    </main>
+</div>
+</body>
+</html>

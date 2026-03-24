@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% if client %}
+<section class="content-card details-card">
+    <div class="details-top">
+        <div>
+            <h2>{{ client.name }}</h2>
+            <p>{{ client.phone }}</p>
+            <p>{{ client.address or 'Адрес не указан' }}</p>
+        </div>
+        <a class="btn btn-light" href="/clients-page">Назад к клиентам</a>
+    </div>
+    {% if client.notes %}
+        <div class="note-box">{{ client.notes }}</div>
+    {% endif %}
+</section>
+
+<section class="content-card">
+    <div class="section-head">
+        <h2>История заказов</h2>
+    </div>
+    <div class="order-grid">
+        {% for item in orders %}
+            <article class="order-card">
+                <div class="order-head">
+                    <span class="status-chip status-{{ item.status.value }}">{{ status_labels[item.status.value] }}</span>
+                    <span class="soft-text">#{{ item.id }}</span>
+                </div>
+                <h3>{{ item.title }}</h3>
+                <p>{{ item.description or 'Описание пока не заполнено' }}</p>
+                <div class="meta-row"><span>Номенклатура</span><strong>{{ item.product.name if item.product else '—' }}</strong></div>
+                <div class="meta-row"><span>Оплата</span><strong>{{ payment_labels[item.payment_method.value] if item.payment_method else '—' }}</strong></div>
+            </article>
+        {% else %}
+            <div class="empty-state-box">У клиента пока нет заказов.</div>
+        {% endfor %}
+    </div>
+</section>
+{% else %}
+<div class="content-card empty-state-box">Клиент не найден.</div>
+{% endif %}
+{% endblock %}

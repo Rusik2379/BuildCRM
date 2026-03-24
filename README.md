@@ -1,176 +1,87 @@
 # BuildCRM Starter
 
-Стартовый каркас для строительной CRM на **Python + FastAPI + PostgreSQL** с отдельным модулем **Telegram-бота**.
+Теперь это не только API, но и простой локальный сайт для первого MVP.
 
-## Что внутри
+## Что уже есть
 
-- простой и понятный backend
-- роли: `admin`, `director`, `manager`
-- сущности: пользователи, клиенты, объекты/заказы, задачи, материалы, финансы
-- Telegram-бот только для уведомлений и подтверждений задач
-- Docker Compose для PostgreSQL
+- страница клиентов
+- страница товаров
+- страница заявок клиентов
+- простая панель с количеством записей
+- JSON API для клиентов, товаров и заявок
+- поддержка SQLite для локальной разработки
+- PostgreSQL можно подключить позже через `DATABASE_URL`
 
-## Структура
+## Структура новых частей
 
 ```text
-build-crm-starter/
-├── app/
-│   ├── api/
-│   │   ├── deps.py
-│   │   └── routes/
-│   │       ├── auth.py
-│   │       ├── clients.py
-│   │       ├── projects.py
-│   │       ├── tasks.py
-│   │       └── stats.py
-│   ├── bot/
-│   │   ├── handlers/
-│   │   │   └── tasks.py
-│   │   ├── keyboards/
-│   │   │   └── task_actions.py
-│   │   └── main.py
-│   ├── core/
-│   │   ├── config.py
-│   │   ├── db.py
-│   │   └── security.py
-│   ├── models/
-│   │   ├── base.py
-│   │   ├── client.py
-│   │   ├── finance.py
-│   │   ├── material.py
-│   │   ├── project.py
-│   │   ├── task.py
-│   │   └── user.py
-│   ├── schemas/
-│   │   ├── auth.py
-│   │   ├── client.py
-│   │   ├── project.py
-│   │   ├── task.py
-│   │   └── user.py
-│   ├── services/
-│   │   ├── auth_service.py
-│   │   ├── notification_service.py
-│   │   ├── stats_service.py
-│   │   └── task_service.py
-│   └── main.py
-├── migrations/
-├── tests/
-├── .env.example
-├── .gitignore
-├── docker-compose.yml
-├── requirements.txt
-└── README.md
+app/
+├── api/routes/
+│   ├── clients.py
+│   ├── products.py
+│   ├── requests.py
+│   └── web.py
+├── models/
+│   ├── client.py
+│   ├── product.py
+│   └── client_request.py
+├── services/
+│   ├── client_service.py
+│   ├── product_service.py
+│   └── request_service.py
+├── templates/
+│   ├── base.html
+│   ├── dashboard.html
+│   ├── clients.html
+│   ├── products.html
+│   └── requests.html
+└── static/
+    └── styles.css
 ```
 
-## Как запускать локально
+## Локальный запуск
 
-### 1. Подними PostgreSQL
+### 1. Создай `.env`
 
-```bash
-docker compose up -d
+Для локального запуска через SQLite:
+
+```env
+APP_NAME=BuildCRM
+APP_HOST=0.0.0.0
+APP_PORT=8000
+DEBUG=true
+SECRET_KEY=change-me
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+DATABASE_URL=sqlite:///./buildcrm.db
+TG_BOT_TOKEN=
+TG_TASK_CHAT_ID=0
 ```
 
-### 2. Создай виртуальное окружение и установи зависимости
+### 2. Установи зависимости
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate  # Linux / macOS
 pip install -r requirements.txt
 ```
 
-### 3. Создай `.env`
-
-```bash
-cp .env.example .env
-```
-
-### 4. Запусти API
+### 3. Запусти проект
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-Документация FastAPI будет на:
+## Страницы
 
+- `http://127.0.0.1:8000/dashboard`
+- `http://127.0.0.1:8000/clients-page`
+- `http://127.0.0.1:8000/products-page`
+- `http://127.0.0.1:8000/requests-page`
 - `http://127.0.0.1:8000/docs`
 
-## Как запускать Telegram-бота
+## Что лучше делать дальше
 
-После заполнения `TG_BOT_TOKEN`:
-
-```bash
-python -m app.bot.main
-```
-
-## Логика ролей
-
-### Admin
-- управляет системой
-- создаёт пользователей
-- видит всё
-
-### Director
-- смотрит статистику, финансы, все проекты
-- не обязательно редактирует всё подряд
-
-### Manager
-- ведёт клиентов
-- создаёт объекты/заказы
-- ставит задачи
-- отслеживает выполнение
-
-## Что делать первым этапом
-
-1. Поднять проект и БД
-2. Создать Alembic-миграции
-3. Реализовать вход по JWT
-4. Сделать CRUD для клиентов
-5. Сделать CRUD для объектов/заказов
-6. Сделать задачи и статусы
-7. Подключить Telegram-уведомления
-8. Добавить dashboard/статистику
-
-## Рекомендуемый GitHub-процесс
-
-### Первый пуш
-
-```bash
-git init
-git branch -M main
-git add .
-git commit -m "Initial project structure"
-git remote add origin git@github.com:YOUR_USERNAME/build-crm.git
-git push -u origin main
-```
-
-### Ежедневная работа
-
-```bash
-git checkout -b feature/tasks-module
-# работаешь с кодом
-git add .
-git commit -m "Add task service and task routes"
-git push -u origin feature/tasks-module
-```
-
-После этого открываешь Pull Request на GitHub и вливаешь изменения в `main`.
-
-### Полезные правила
-
-- `main` — только стабильный код
-- одна задача = одна ветка
-- коммиты маленькие и понятные
-- `.env` никогда не пушить
-- перед пушем запускать проект локально
-
-## Ближайшая хорошая цель
-
-Сначала сделать только такой MVP:
-
-- авторизация
-- клиенты
-- объекты/заказы
-- задачи
-- Telegram-уведомления по задачам
-
-Без сложного склада, отчётов и бухгалтерии на первом этапе.
+1. добавить редактирование и удаление
+2. сделать нормальные миграции через Alembic
+3. добавить авторизацию в веб-интерфейс
+4. связать заявки и задачи
+5. подключить Telegram-уведомления

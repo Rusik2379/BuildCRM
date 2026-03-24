@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="stats-grid compact-gap">
+    <article class="stat-card">
+        <span>Клиенты</span>
+        <strong>{{ stats.clients }}</strong>
+    </article>
+    <article class="stat-card">
+        <span>Номенклатура</span>
+        <strong>{{ stats.products }}</strong>
+    </article>
+    <article class="stat-card">
+        <span>Заказы</span>
+        <strong>{{ stats.requests }}</strong>
+    </article>
+</section>
+
+<section class="content-card empty-state-box">
+    <h2>Что уже готово</h2>
+    <p>Локально работает веб-интерфейс с клиентами, номенклатурой и заказами. Дальше можно добавлять историю клиента, редактирование, удаление и связи между заказами и товарами.</p>
+</section>
+{% endblock %}

@@ -12,4 +12,5 @@ venv/
 .coverage
 htmlcov/
 *.sqlite3
+*.db
 .DS_Store

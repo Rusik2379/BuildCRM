@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="stats-grid">
+    <article class="stat-card">
+        <span>Всего заказов</span>
+        <strong>{{ stats.total }}</strong>
+    </article>
+    <article class="stat-card">
+        <span>Новые</span>
+        <strong>{{ stats.new }}</strong>
+    </article>
+    <article class="stat-card">
+        <span>В работе</span>
+        <strong>{{ stats.in_progress }}</strong>
+    </article>
+    <article class="stat-card">
+        <span>Завершённые</span>
+        <strong>{{ stats.done }}</strong>
+    </article>
+</section>
+
+<section class="content-card">
+    <div class="toolbar two-side">
+        <form method="get" action="/requests-page" class="toolbar-group grow">
+            <select name="status" class="select-filter">
+                <option value="all" {% if current_status == 'all' %}selected{% endif %}>Все статусы</option>
+                {% for value in statuses %}
+                    <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ status_labels[value] }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn btn-light" type="submit">Фильтр</button>
+        </form>
+        <button class="btn btn-primary" type="button" data-open-modal="order-modal">+ Создать заказ</button>
+    </div>
+
+    <div class="order-grid">
+        {% for item in requests %}
+            <article class="order-card">
+                <div class="order-head">
+                    <span class="status-chip status-{{ item.status.value }}">{{ status_labels[item.status.value] }}</span>
+                    <span class="soft-text">#{{ item.id }}</span>
+                </div>
+                <h3>{{ item.title }}</h3>
+                <p>{{ item.description or 'Описание не заполнено' }}</p>
+                <div class="meta-row"><span>Клиент</span><strong>{{ item.client.name }}</strong></div>
+                <div class="meta-row"><span>Телефон</span><strong>{{ item.client.phone }}</strong></div>
+                <div class="meta-row"><span>Номенклатура</span><strong>{{ item.product.name if item.product else '—' }}</strong></div>
+                <div class="meta-row"><span>Оплата</span><strong>{{ payment_labels[item.payment_method.value] if item.payment_method else 'Пока не выбрано' }}</strong></div>
+                <div class="meta-row"><span>Создано</span><strong>{{ item.created_at.strftime('%d.%m.%Y %H:%M') }}</strong></div>
+            </article>
+        {% else %}
+            <div class="empty-state-box">Заказов пока нет.</div>
+        {% endfor %}
+    </div>
+</section>
+
+<div class="modal" id="order-modal">
+    <div class="modal-backdrop" data-close-modal="order-modal"></div>
+    <div class="modal-dialog modal-wide">
+        <div class="modal-header">
+            <h3>Создать заказ</h3>
+            <button type="button" class="icon-btn" data-close-modal="order-modal">×</button>
+        </div>
+        <form method="post" action="/requests-page" class="form-grid">
+            <label class="autocomplete-wrap">
+                <span>Клиент</span>
+                <input type="text" name="client_query" required placeholder="Имя или номер клиента" data-autocomplete="/lookup/clients" autocomplete="off">
+                <div class="autocomplete-list"></div>
+            </label>
+            <label class="autocomplete-wrap">
+                <span>Номенклатура</span>
+                <input type="text" name="product_query" placeholder="Начни вводить название" data-autocomplete="/lookup/products" autocomplete="off">
+                <div class="autocomplete-list"></div>
+            </label>
+            <label>
+                <span>Название заказа</span>
+                <input type="text" name="title" required placeholder="Например: закупка доски на объект Петрова">
+            </label>
+            <div class="inline-fields three-cols">
+                <label>
+                    <span>Статус</span>
+                    <select name="status">
+                        {% for value in statuses %}
+                            <option value="{{ value }}">{{ status_labels[value] }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    <span>Способ оплаты</span>
+                    <select name="payment_method">
+                        <option value="">Пока не выбрано</option>
+                        {% for key, label in payment_labels.items() %}
+                            <option value="{{ key }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+            </div>
+            <label>
+                <span>Описание</span>
+                <textarea name="description" rows="5" placeholder="Комментарий, детали объекта, срок"></textarea>
+            </label>
+            <button class="btn btn-primary" type="submit">Сохранить заказ</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
