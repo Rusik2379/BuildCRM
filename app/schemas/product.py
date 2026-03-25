@@ -3,9 +3,10 @@ from pydantic import BaseModel
 
 class ProductBase(BaseModel):
     name: str
+    category: str | None = None
     unit: str = "шт"
-    price: float = 0
-    notes: str | None = None
+    description: str | None = None
+    is_wholesale: bool = False
 
 
 class ProductCreate(ProductBase):

@@ -1,87 +1,50 @@
-{% extends "base.html" %}
-
+{% extends 'base.html' %}
+{% block title %}Клиенты{% endblock %}
+{% block page_title %}Клиенты{% endblock %}
 {% block content %}
-<section class="stats-grid">
-    <article class="stat-card">
-        <span>Всего клиентов</span>
-        <strong>{{ stats.total }}</strong>
-    </article>
-    <article class="stat-card">
-        <span>Показано</span>
-        <strong>{{ stats.visible }}</strong>
-    </article>
-    <article class="stat-card">
-        <span>С телефонами</span>
-        <strong>{{ stats.with_phone }}</strong>
-    </article>
-</section>
-
-<section class="content-card">
-    <div class="toolbar two-side">
-        <form method="get" action="/clients-page" class="toolbar-group grow">
-            <input class="search-input" type="text" name="search" value="{{ search }}" placeholder="Поиск по имени, номеру, адресу">
-            <button class="btn btn-light" type="submit">Найти</button>
-            {% if search %}<a class="btn btn-light" href="/clients-page">Сбросить</a>{% endif %}
-        </form>
-        <button class="btn btn-primary" type="button" data-open-modal="client-modal">+ Добавить клиента</button>
-    </div>
-
-    <div class="table-card">
-        <table class="data-table">
-            <thead>
-            <tr>
-                <th>ID</th>
-                <th>Клиент</th>
-                <th>Телефон</th>
-                <th>Адрес</th>
-                <th>Комментарий</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for client in clients %}
-                <tr>
-                    <td>#{{ client.id }}</td>
-                    <td><a class="record-link" href="/clients/{{ client.id }}">{{ client.name }}</a></td>
-                    <td>{{ client.phone }}</td>
-                    <td>{{ client.address or '—' }}</td>
-                    <td>{{ client.notes or '—' }}</td>
-                </tr>
-            {% else %}
-                <tr>
-                    <td colspan="5" class="empty">Клиентов пока нет</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</section>
-
-<div class="modal" id="client-modal">
-    <div class="modal-backdrop" data-close-modal="client-modal"></div>
-    <div class="modal-dialog">
-        <div class="modal-header">
-            <h3>Добавить клиента</h3>
-            <button type="button" class="icon-btn" data-close-modal="client-modal">×</button>
-        </div>
-        <form method="post" action="/clients-page" class="form-grid">
-            <label>
-                <span>Имя</span>
-                <input type="text" name="name" required>
-            </label>
-            <label>
-                <span>Телефон</span>
-                <input type="text" name="phone" required>
-            </label>
-            <label>
-                <span>Адрес</span>
-                <input type="text" name="address">
-            </label>
-            <label>
-                <span>Комментарий</span>
-                <textarea name="notes" rows="4"></textarea>
-            </label>
-            <button class="btn btn-primary" type="submit">Сохранить</button>
-        </form>
-    </div>
+<div class="panel">
+  <form class="filters" method="get">
+    <input type="text" name="search" value="{{ search }}" placeholder="Поиск по имени, телефону, адресу">
+    <select name="source"><option value="">Все источники</option>{% for item in client_sources %}<option value="{{ item }}" {% if source == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select>
+    <select name="category"><option value="">Все категории</option>{% for item in client_categories %}<option value="{{ item }}" {% if category == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select>
+    <button class="btn btn-light" type="submit">Фильтр</button>
+  </form>
+</div>
+<div class="stats-grid three">
+  <div class="stat-card"><div class="stat-label">Всего клиентов</div><div class="stat-value">{{ total_clients }}</div></div>
+  <div class="stat-card"><div class="stat-label">Источники</div><div class="stat-value">{{ client_sources|length }}</div></div>
+  <div class="stat-card"><div class="stat-label">Категории</div><div class="stat-value">{{ client_categories|length }}</div></div>
+</div>
+<div class="split two-cols">
+  <section class="panel">
+    <h3>Добавить клиента</h3>
+    <form method="post" action="/clients" class="form-grid two-cols">
+      <div><label>Имя</label><input name="name" required></div>
+      <div><label>Телефон</label><input name="phone" required></div>
+      <div><label>Источник</label><select name="source"><option value=""></option>{% for item in client_sources %}<option value="{{ item }}">{{ item }}</option>{% endfor %}</select></div>
+      <div><label>Категория</label><select name="category"><option value=""></option>{% for item in client_categories %}<option value="{{ item }}">{{ item }}</option>{% endfor %}</select></div>
+      <div class="full"><label>Адрес</label><input name="address"></div>
+      <div class="full"><label>Комментарий</label><textarea name="notes"></textarea></div>
+      <div class="full"><button class="btn" type="submit">Сохранить</button></div>
+    </form>
+  </section>
+  <section class="panel">
+    <h3>База клиентов</h3>
+    <table class="table">
+      <thead><tr><th>Имя</th><th>Телефон</th><th>Источник</th><th>Категория</th></tr></thead>
+      <tbody>
+      {% for client in clients %}
+      <tr>
+        <td><a href="/clients/{{ client.id }}">{{ client.name }}</a></td>
+        <td>{{ client.phone }}</td>
+        <td>{{ client.source or '—' }}</td>
+        <td>{{ client.category or '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4">Клиентов пока нет</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
 </div>
 {% endblock %}

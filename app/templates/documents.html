@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}Документы{% endblock %}
+{% block page_title %}Документы{% endblock %}
+{% block content %}
+<div class="panel">
+  <h3>Раздел подготовки документов</h3>
+  <p>Сейчас это рабочая заготовка. Здесь будут шаблоны и формирование PDF/печатных форм.</p>
+  <div class="cards-grid three">{% for item in docs %}<div class="doc-card">{{ item }}</div>{% endfor %}</div>
+</div>
+{% endblock %}

@@ -1,43 +1,47 @@
-{% extends "base.html" %}
-
+{% extends 'base.html' %}
+{% block title %}Карточка клиента{% endblock %}
+{% block page_title %}Карточка клиента{% endblock %}
 {% block content %}
 {% if client %}
-<section class="content-card details-card">
-    <div class="details-top">
-        <div>
-            <h2>{{ client.name }}</h2>
-            <p>{{ client.phone }}</p>
-            <p>{{ client.address or 'Адрес не указан' }}</p>
-        </div>
-        <a class="btn btn-light" href="/clients-page">Назад к клиентам</a>
-    </div>
-    {% if client.notes %}
-        <div class="note-box">{{ client.notes }}</div>
-    {% endif %}
-</section>
-
-<section class="content-card">
-    <div class="section-head">
-        <h2>История заказов</h2>
-    </div>
-    <div class="order-grid">
-        {% for item in orders %}
-            <article class="order-card">
-                <div class="order-head">
-                    <span class="status-chip status-{{ item.status.value }}">{{ status_labels[item.status.value] }}</span>
-                    <span class="soft-text">#{{ item.id }}</span>
-                </div>
-                <h3>{{ item.title }}</h3>
-                <p>{{ item.description or 'Описание пока не заполнено' }}</p>
-                <div class="meta-row"><span>Номенклатура</span><strong>{{ item.product.name if item.product else '—' }}</strong></div>
-                <div class="meta-row"><span>Оплата</span><strong>{{ payment_labels[item.payment_method.value] if item.payment_method else '—' }}</strong></div>
-            </article>
+<div class="stats-grid three">
+  <div class="stat-card"><div class="stat-label">Розничные заявки</div><div class="stat-value">{{ retail_count }}</div></div>
+  <div class="stat-card"><div class="stat-label">Оптовые заявки</div><div class="stat-value">{{ wholesale_count }}</div></div>
+  <div class="stat-card"><div class="stat-label">Всего заказов</div><div class="stat-value">{{ client.orders|length }}</div></div>
+</div>
+<div class="split two-cols">
+  <section class="panel">
+    <h3>Данные клиента</h3>
+    <form method="post" action="/clients/{{ client.id }}/edit" class="form-grid two-cols">
+      <div><label>Имя</label><input name="name" value="{{ client.name }}" required></div>
+      <div><label>Телефон</label><input name="phone" value="{{ client.phone }}" required></div>
+      <div><label>Источник</label><select name="source"><option value=""></option>{% for item in client_sources %}<option value="{{ item }}" {% if client.source == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></div>
+      <div><label>Категория</label><select name="category"><option value=""></option>{% for item in client_categories %}<option value="{{ item }}" {% if client.category == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></div>
+      <div class="full"><label>Адрес</label><input name="address" value="{{ client.address or '' }}"></div>
+      <div class="full"><label>Комментарий</label><textarea name="notes">{{ client.notes or '' }}</textarea></div>
+      <div class="full"><button class="btn" type="submit">Сохранить изменения</button></div>
+    </form>
+  </section>
+  <section class="panel">
+    <h3>История заказов</h3>
+    <table class="table">
+      <thead><tr><th>ID</th><th>Тип</th><th>Статус</th><th>Сумма</th><th>Прибыль</th></tr></thead>
+      <tbody>
+        {% for order in client.orders|sort(attribute='created_at', reverse=True) %}
+        <tr>
+          <td>#{{ order.id }}</td>
+          <td>{{ 'Розница' if order.kind == 'retail' else 'Опт' }}</td>
+          <td>{{ order.status }}</td>
+          <td>{{ order.total_revenue }} ₽</td>
+          <td>{{ order.total_profit }} ₽</td>
+        </tr>
         {% else %}
-            <div class="empty-state-box">У клиента пока нет заказов.</div>
+        <tr><td colspan="5">У клиента пока нет заказов</td></tr>
         {% endfor %}
-    </div>
-</section>
+      </tbody>
+    </table>
+  </section>
+</div>
 {% else %}
-<div class="content-card empty-state-box">Клиент не найден.</div>
+<div class="panel">Клиент не найден</div>
 {% endif %}
 {% endblock %}

@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block title %}Поставщики{% endblock %}
+{% block page_title %}Поставщики{% endblock %}
+{% block content %}
+<div class="split two-cols">
+  <section class="panel">
+    <h3>Добавить поставщика</h3>
+    <form method="post" action="/suppliers" class="form-grid two-cols">
+      <div><label>Название</label><input name="name" required></div>
+      <div><label>Город</label><input name="city"></div>
+      <div><label>Телефон</label><input name="phone"></div>
+      <div><label>Стартовый баланс</label><input name="balance" type="number" step="0.01" value="0"></div>
+      <div class="full"><label>Комментарий</label><textarea name="notes"></textarea></div>
+      <div class="full"><button class="btn" type="submit">Сохранить</button></div>
+    </form>
+  </section>
+  <section class="panel">
+    <h3>Поставщики</h3>
+    <table class="table compact">
+      <thead><tr><th>Название</th><th>Город</th><th>Баланс</th><th>Изменить баланс</th></tr></thead>
+      <tbody>
+      {% for item in suppliers %}
+      <tr>
+        <td>{{ item.name }}</td><td>{{ item.city or '—' }}</td><td>{{ item.balance }} ₽</td>
+        <td>
+          <form method="post" action="/suppliers/{{ item.id }}/balance" class="inline-form">
+            <input name="amount" type="number" step="0.01" placeholder="+/- сумма" required>
+            <input name="reason" placeholder="Причина">
+            <button class="btn btn-small" type="submit">Ок</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4">Поставщиков пока нет</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+<div class="panel">
+  <h3>Последние движения баланса</h3>
+  <table class="table">
+    <thead><tr><th>Дата</th><th>Поставщик</th><th>Сумма</th><th>Причина</th></tr></thead>
+    <tbody>{% for item in movements %}<tr><td>{{ item.created_at.strftime('%d.%m.%Y %H:%M') }}</td><td>{{ item.supplier.name }}</td><td>{{ item.amount }}</td><td>{{ item.reason or '—' }}</td></tr>{% else %}<tr><td colspan="4">Движений пока нет</td></tr>{% endfor %}</tbody>
+  </table>
+</div>
+{% endblock %}

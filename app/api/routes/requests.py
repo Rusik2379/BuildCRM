@@ -9,8 +9,12 @@ router = APIRouter(prefix="/requests", tags=["requests"])
 
 
 @router.get("", response_model=list[ClientRequestRead])
-def list_requests(status: str | None = Query(default=None), db: Session = Depends(get_db_session)):
-    return RequestService.list_requests(db, status=status)
+def list_requests(
+    status: str | None = Query(default=None),
+    kind: str | None = Query(default=None),
+    db: Session = Depends(get_db_session),
+):
+    return RequestService.list_requests(db, status=status, kind=kind)
 
 
 @router.post("", response_model=ClientRequestRead)

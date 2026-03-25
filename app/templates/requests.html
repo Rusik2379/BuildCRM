@@ -1,9 +1,20 @@
 {% extends "base.html" %}
 
 {% block content %}
+<section class="segment-switch content-card kind-switcher">
+    <a href="/requests-page?kind=retail" class="segment-link {% if current_kind == 'retail' %}active{% endif %}">
+        <span>Розничные заказы</span>
+        <strong>{{ stats.retail_total }}</strong>
+    </a>
+    <a href="/requests-page?kind=wholesale" class="segment-link {% if current_kind == 'wholesale' %}active{% endif %}">
+        <span>Оптовые заявки</span>
+        <strong>{{ stats.wholesale_total }}</strong>
+    </a>
+</section>
+
 <section class="stats-grid">
     <article class="stat-card">
-        <span>Всего заказов</span>
+        <span>Всего в разделе</span>
         <strong>{{ stats.total }}</strong>
     </article>
     <article class="stat-card">
@@ -23,6 +34,7 @@
 <section class="content-card">
     <div class="toolbar two-side">
         <form method="get" action="/requests-page" class="toolbar-group grow">
+            <input type="hidden" name="kind" value="{{ current_kind }}">
             <select name="status" class="select-filter">
                 <option value="all" {% if current_status == 'all' %}selected{% endif %}>Все статусы</option>
                 {% for value in statuses %}
@@ -31,14 +43,17 @@
             </select>
             <button class="btn btn-light" type="submit">Фильтр</button>
         </form>
-        <button class="btn btn-primary" type="button" data-open-modal="order-modal">+ Создать заказ</button>
+        <button class="btn btn-primary" type="button" data-open-modal="order-modal">+ Создать {% if current_kind == 'wholesale' %}оптовую заявку{% else %}заказ{% endif %}</button>
     </div>
 
     <div class="order-grid">
         {% for item in requests %}
-            <article class="order-card">
+            <article class="order-card order-card-{{ item.kind.value }}">
                 <div class="order-head">
-                    <span class="status-chip status-{{ item.status.value }}">{{ status_labels[item.status.value] }}</span>
+                    <div class="head-stack">
+                        <span class="status-chip status-{{ item.status.value }}">{{ status_labels[item.status.value] }}</span>
+                        <span class="kind-chip kind-{{ item.kind.value }}">{{ kind_labels[item.kind.value] }}</span>
+                    </div>
                     <span class="soft-text">#{{ item.id }}</span>
                 </div>
                 <h3>{{ item.title }}</h3>
@@ -50,7 +65,7 @@
                 <div class="meta-row"><span>Создано</span><strong>{{ item.created_at.strftime('%d.%m.%Y %H:%M') }}</strong></div>
             </article>
         {% else %}
-            <div class="empty-state-box">Заказов пока нет.</div>
+            <div class="empty-state-box">В этом разделе пока нет записей.</div>
         {% endfor %}
     </div>
 </section>
@@ -59,10 +74,11 @@
     <div class="modal-backdrop" data-close-modal="order-modal"></div>
     <div class="modal-dialog modal-wide">
         <div class="modal-header">
-            <h3>Создать заказ</h3>
+            <h3>{% if current_kind == 'wholesale' %}Создать оптовую заявку{% else %}Создать розничный заказ{% endif %}</h3>
             <button type="button" class="icon-btn" data-close-modal="order-modal">×</button>
         </div>
         <form method="post" action="/requests-page" class="form-grid">
+            <input type="hidden" name="kind" value="{{ current_kind }}">
             <label class="autocomplete-wrap">
                 <span>Клиент</span>
                 <input type="text" name="client_query" required placeholder="Имя или номер клиента" data-autocomplete="/lookup/clients" autocomplete="off">
@@ -74,8 +90,8 @@
                 <div class="autocomplete-list"></div>
             </label>
             <label>
-                <span>Название заказа</span>
-                <input type="text" name="title" required placeholder="Например: закупка доски на объект Петрова">
+                <span>Название {% if current_kind == 'wholesale' %}заявки{% else %}заказа{% endif %}</span>
+                <input type="text" name="title" required placeholder="Например: {% if current_kind == 'wholesale' %}оптовая поставка газоблока{% else %}доставка доски на объект{% endif %}">
             </label>
             <div class="inline-fields three-cols">
                 <label>
@@ -98,9 +114,9 @@
             </div>
             <label>
                 <span>Описание</span>
-                <textarea name="description" rows="5" placeholder="Комментарий, детали объекта, срок"></textarea>
+                <textarea name="description" rows="5" placeholder="Комментарий, объём, детали объекта, срок"></textarea>
             </label>
-            <button class="btn btn-primary" type="submit">Сохранить заказ</button>
+            <button class="btn btn-primary" type="submit">Сохранить</button>
         </form>
     </div>
 </div>

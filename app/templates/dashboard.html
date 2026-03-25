@@ -1,23 +1,28 @@
-{% extends "base.html" %}
-
+{% extends 'base.html' %}
+{% block title %}Дашборд{% endblock %}
+{% block page_title %}Дашборд{% endblock %}
 {% block content %}
-<section class="stats-grid compact-gap">
-    <article class="stat-card">
-        <span>Клиенты</span>
-        <strong>{{ stats.clients }}</strong>
-    </article>
-    <article class="stat-card">
-        <span>Номенклатура</span>
-        <strong>{{ stats.products }}</strong>
-    </article>
-    <article class="stat-card">
-        <span>Заказы</span>
-        <strong>{{ stats.requests }}</strong>
-    </article>
-</section>
-
-<section class="content-card empty-state-box">
-    <h2>Что уже готово</h2>
-    <p>Локально работает веб-интерфейс с клиентами, номенклатурой и заказами. Дальше можно добавлять историю клиента, редактирование, удаление и связи между заказами и товарами.</p>
-</section>
+<div class="stats-grid four">
+  <div class="stat-card"><div class="stat-label">Клиенты</div><div class="stat-value">{{ stats.total_clients }}</div></div>
+  <div class="stat-card"><div class="stat-label">Номенклатура</div><div class="stat-value">{{ stats.total_products }}</div></div>
+  <div class="stat-card"><div class="stat-label">Остаток на складах</div><div class="stat-value">{{ stats.total_stock }}</div></div>
+  <div class="stat-card"><div class="stat-label">Выручка</div><div class="stat-value">{{ '%.2f'|format(stats.revenue) }} ₽</div></div>
+  <div class="stat-card"><div class="stat-label">Прибыль</div><div class="stat-value">{{ '%.2f'|format(stats.profit) }} ₽</div></div>
+  <div class="stat-card"><div class="stat-label">Розничные заявки</div><div class="stat-value">{{ stats.retail_orders }}</div></div>
+  <div class="stat-card"><div class="stat-label">Оптовые заявки</div><div class="stat-value">{{ stats.wholesale_orders }}</div></div>
+  <div class="stat-card"><div class="stat-label">Поставщики / Водители</div><div class="stat-value">{{ stats.total_suppliers }} / {{ stats.total_drivers }}</div></div>
+</div>
+<div class="panel">
+  <h3>Источники клиентов</h3>
+  <table class="table">
+    <thead><tr><th>Источник</th><th>Клиентов</th></tr></thead>
+    <tbody>
+      {% for source, count in source_stats %}
+      <tr><td>{{ source or 'Не указано' }}</td><td>{{ count }}</td></tr>
+      {% else %}
+      <tr><td colspan="2">Пока нет данных</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% endblock %}

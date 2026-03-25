@@ -9,8 +9,13 @@ router = APIRouter(prefix="/products", tags=["products"])
 
 
 @router.get("", response_model=list[ProductRead])
-def list_products(search: str | None = Query(default=None), db: Session = Depends(get_db_session)):
-    return ProductService.list_products(db, search=search)
+def list_products(
+    search: str | None = Query(default=None),
+    category: str | None = Query(default=None),
+    wholesale: str | None = Query(default=None),
+    db: Session = Depends(get_db_session),
+):
+    return ProductService.list_products(db, search=search, category=category, wholesale=wholesale)
 
 
 @router.post("", response_model=ProductRead)

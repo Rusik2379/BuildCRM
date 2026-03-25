@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}Водители{% endblock %}
+{% block page_title %}Водители{% endblock %}
+{% block content %}
+<div class="split two-cols">
+  <section class="panel">
+    <h3>Добавить водителя</h3>
+    <form method="post" action="/drivers" class="form-grid two-cols">
+      <div><label>ФИО</label><input name="name" required></div>
+      <div><label>Телефон</label><input name="phone"></div>
+      <div><label>Машина</label><input name="vehicle"></div>
+      <div class="full"><label>Комментарий</label><textarea name="notes"></textarea></div>
+      <div class="full"><button class="btn" type="submit">Сохранить</button></div>
+    </form>
+  </section>
+  <section class="panel">
+    <h3>Водители</h3>
+    <table class="table compact">
+      <thead><tr><th>ФИО</th><th>Машина</th><th>На руках</th><th>Корректировка</th></tr></thead>
+      <tbody>
+      {% for item in drivers %}
+      <tr>
+        <td>{{ item.name }}</td><td>{{ item.vehicle or '—' }}</td><td>{{ item.cash_on_hand_balance }} ₽</td>
+        <td>
+          <form method="post" action="/drivers/{{ item.id }}/cash" class="inline-form">
+            <input name="amount" type="number" step="0.01" placeholder="+/- сумма" required>
+            <input name="reason" placeholder="Причина">
+            <button class="btn btn-small" type="submit">Ок</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4">Водителей пока нет</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+<div class="panel">
+  <h3>Последние движения денег у водителей</h3>
+  <table class="table">
+    <thead><tr><th>Дата</th><th>Водитель</th><th>Сумма</th><th>Причина</th></tr></thead>
+    <tbody>{% for item in movements %}<tr><td>{{ item.created_at.strftime('%d.%m.%Y %H:%M') }}</td><td>{{ item.driver.name }}</td><td>{{ item.amount }}</td><td>{{ item.reason or '—' }}</td></tr>{% else %}<tr><td colspan="4">Движений пока нет</td></tr>{% endfor %}</tbody>
+  </table>
+</div>
+{% endblock %}

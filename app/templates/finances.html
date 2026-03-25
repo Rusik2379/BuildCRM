@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Финансы{% endblock %}
+{% block page_title %}Финансы{% endblock %}
+{% block content %}
+<div class="stats-grid four">
+  <div class="stat-card"><div class="stat-label">Общая выручка</div><div class="stat-value">{{ '%.2f'|format(stats.revenue) }} ₽</div></div>
+  <div class="stat-card"><div class="stat-label">Общая прибыль</div><div class="stat-value">{{ '%.2f'|format(stats.profit) }} ₽</div></div>
+  <div class="stat-card"><div class="stat-label">Розничные заявки</div><div class="stat-value">{{ stats.retail_orders }}</div></div>
+  <div class="stat-card"><div class="stat-label">Оптовые заявки</div><div class="stat-value">{{ stats.wholesale_orders }}</div></div>
+</div>
+<div class="panel">
+  <h3>Сводка по типам заявок</h3>
+  <table class="table">
+    <thead><tr><th>Тип</th><th>Выручка</th><th>Закуп</th><th>Прибыль</th><th>Количество</th></tr></thead>
+    <tbody>{% for kind, revenue, purchase, profit, count in totals %}<tr><td>{{ 'Розница' if kind == 'retail' else 'Опт' }}</td><td>{{ revenue }} ₽</td><td>{{ purchase }} ₽</td><td>{{ profit }} ₽</td><td>{{ count }}</td></tr>{% else %}<tr><td colspan="5">Пока нет данных</td></tr>{% endfor %}</tbody>
+  </table>
+</div>
+<div class="panel">
+  <h3>Последние заказы</h3>
+  <table class="table">
+    <thead><tr><th>ID</th><th>Клиент</th><th>Тип</th><th>Сумма</th><th>Прибыль</th></tr></thead>
+    <tbody>{% for item in latest_orders %}<tr><td>#{{ item.id }}</td><td>{{ item.client.name }}</td><td>{{ 'Розница' if item.kind == 'retail' else 'Опт' }}</td><td>{{ item.total_revenue }}</td><td>{{ item.total_profit }}</td></tr>{% else %}<tr><td colspan="5">Нет заказов</td></tr>{% endfor %}</tbody>
+  </table>
+</div>
+{% endblock %}
