@@ -15,13 +15,19 @@ class Client(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(150), nullable=False, index=True)
     phone: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    client_type: Mapped[str] = mapped_column(String(20), nullable=False, default='retail', index=True)  # retail / wholesale
     address: Mapped[str | None] = mapped_column(String(255), nullable=True)
     source: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     category: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
 
-    orders: Mapped[list['Order']] = relationship(back_populates='client', cascade='all, delete-orphan')
+    orders: Mapped[list['Order']] = relationship(
+        back_populates='client',
+        cascade='all, delete-orphan',
+    )
 
 
 class Product(Base):
@@ -32,14 +38,16 @@ class Product(Base):
     category: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     unit: Mapped[str] = mapped_column(String(30), nullable=False, default='шт')
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    purchase_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
-    retail_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
-    small_opt_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
-    large_opt_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
-    is_wholesale: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    purchase_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
+    retail_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
+    small_opt_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
+    large_opt_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
+    is_wholesale: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
 
-    stock_items: Mapped[list['StockItem']] = relationship(back_populates='product', cascade='all, delete-orphan')
+    stock_items: Mapped[list['StockItem']] = relationship(back_populates='product')
     order_items: Mapped[list['OrderItem']] = relationship(back_populates='product')
 
 
@@ -47,15 +55,21 @@ class Supplier(Base):
     __tablename__ = 'suppliers'
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(150), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(150), nullable=False, index=True)
     city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
 
     stock_items: Mapped[list['StockItem']] = relationship(back_populates='supplier')
     orders: Mapped[list['Order']] = relationship(back_populates='supplier')
-    movements: Mapped[list['SupplierBalanceMovement']] = relationship(back_populates='supplier', cascade='all, delete-orphan')
+    balance_movements: Mapped[list['SupplierBalanceMovement']] = relationship(
+        back_populates='supplier',
+        cascade='all, delete-orphan',
+    )
 
 
 class SupplierBalanceMovement(Base):
@@ -64,24 +78,32 @@ class SupplierBalanceMovement(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     supplier_id: Mapped[int] = mapped_column(ForeignKey('suppliers.id'), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
 
-    supplier: Mapped['Supplier'] = relationship(back_populates='movements')
+    supplier: Mapped['Supplier'] = relationship(back_populates='balance_movements')
 
 
 class Driver(Base):
     __tablename__ = 'drivers'
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    name: Mapped[str] = mapped_column(String(150), nullable=False, index=True)
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    vehicle: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    cash_on_hand_balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    vehicle: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    cash_on_hand: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
 
     orders: Mapped[list['Order']] = relationship(back_populates='driver')
-    movements: Mapped[list['DriverCashMovement']] = relationship(back_populates='driver', cascade='all, delete-orphan')
+    cash_movements: Mapped[list['DriverCashMovement']] = relationship(
+        back_populates='driver',
+        cascade='all, delete-orphan',
+    )
 
 
 class DriverCashMovement(Base):
@@ -90,10 +112,12 @@ class DriverCashMovement(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     driver_id: Mapped[int] = mapped_column(ForeignKey('drivers.id'), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
 
-    driver: Mapped['Driver'] = relationship(back_populates='movements')
+    driver: Mapped['Driver'] = relationship(back_populates='cash_movements')
 
 
 class StockItem(Base):
@@ -101,12 +125,14 @@ class StockItem(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     product_id: Mapped[int] = mapped_column(ForeignKey('products.id'), nullable=False)
-    warehouse_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    warehouse_name: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     supplier_id: Mapped[int | None] = mapped_column(ForeignKey('suppliers.id'), nullable=True)
-    quantity: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
 
     product: Mapped['Product'] = relationship(back_populates='stock_items')
     supplier: Mapped['Supplier | None'] = relationship(back_populates='stock_items')
@@ -117,25 +143,33 @@ class Order(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     kind: Mapped[str] = mapped_column(String(20), nullable=False, index=True)  # retail / wholesale
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default='new', index=True)
+    payment_method: Mapped[str] = mapped_column(String(30), nullable=False, default='cash')
+    delivery_type: Mapped[str] = mapped_column(String(30), nullable=False, default='pickup')
+    delivery_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
+    additional_costs: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
+    use_supplier_balance: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    total_revenue: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
+    total_purchase: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
+    total_profit: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
+
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+
     client_id: Mapped[int] = mapped_column(ForeignKey('clients.id'), nullable=False)
-    status: Mapped[str] = mapped_column(String(50), nullable=False, default='new')
-    payment_method: Mapped[str] = mapped_column(String(50), nullable=False, default='cash')
-    delivery_type: Mapped[str] = mapped_column(String(50), nullable=False, default='pickup')
-    delivery_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
-    additional_costs: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     supplier_id: Mapped[int | None] = mapped_column(ForeignKey('suppliers.id'), nullable=True)
     driver_id: Mapped[int | None] = mapped_column(ForeignKey('drivers.id'), nullable=True)
-    use_supplier_balance: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    total_revenue: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
-    total_purchase: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
-    total_profit: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
-    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     client: Mapped['Client'] = relationship(back_populates='orders')
     supplier: Mapped['Supplier | None'] = relationship(back_populates='orders')
     driver: Mapped['Driver | None'] = relationship(back_populates='orders')
-    items: Mapped[list['OrderItem']] = relationship(back_populates='order', cascade='all, delete-orphan')
+    items: Mapped[list['OrderItem']] = relationship(
+        back_populates='order',
+        cascade='all, delete-orphan',
+    )
 
 
 class OrderItem(Base):
@@ -144,13 +178,15 @@ class OrderItem(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     order_id: Mapped[int] = mapped_column(ForeignKey('orders.id'), nullable=False)
     product_id: Mapped[int] = mapped_column(ForeignKey('products.id'), nullable=False)
-    quantity: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+
+    quantity: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
     pricing_tier: Mapped[str] = mapped_column(String(30), nullable=False, default='retail')
-    purchase_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
-    sale_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
-    line_purchase_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
-    line_sale_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
-    line_profit: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+
+    purchase_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
+    sale_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
+
+    line_purchase_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
+    line_sale_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
 
     order: Mapped['Order'] = relationship(back_populates='items')
     product: Mapped['Product'] = relationship(back_populates='order_items')

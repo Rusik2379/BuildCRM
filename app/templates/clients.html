@@ -1,50 +1,243 @@
 {% extends 'base.html' %}
+
 {% block title %}Клиенты{% endblock %}
 {% block page_title %}Клиенты{% endblock %}
+{% block page_subtitle %}Поиск, фильтрация и общая база клиентов{% endblock %}
+
 {% block content %}
-<div class="panel">
-  <form class="filters" method="get">
-    <input type="text" name="search" value="{{ search }}" placeholder="Поиск по имени, телефону, адресу">
-    <select name="source"><option value="">Все источники</option>{% for item in client_sources %}<option value="{{ item }}" {% if source == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select>
-    <select name="category"><option value="">Все категории</option>{% for item in client_categories %}<option value="{{ item }}" {% if category == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select>
-    <button class="btn btn-light" type="submit">Фильтр</button>
-  </form>
-</div>
-<div class="stats-grid three">
-  <div class="stat-card"><div class="stat-label">Всего клиентов</div><div class="stat-value">{{ total_clients }}</div></div>
-  <div class="stat-card"><div class="stat-label">Источники</div><div class="stat-value">{{ client_sources|length }}</div></div>
-  <div class="stat-card"><div class="stat-label">Категории</div><div class="stat-value">{{ client_categories|length }}</div></div>
-</div>
-<div class="split two-cols">
-  <section class="panel">
-    <h3>Добавить клиента</h3>
-    <form method="post" action="/clients" class="form-grid two-cols">
-      <div><label>Имя</label><input name="name" required></div>
-      <div><label>Телефон</label><input name="phone" required></div>
-      <div><label>Источник</label><select name="source"><option value=""></option>{% for item in client_sources %}<option value="{{ item }}">{{ item }}</option>{% endfor %}</select></div>
-      <div><label>Категория</label><select name="category"><option value=""></option>{% for item in client_categories %}<option value="{{ item }}">{{ item }}</option>{% endfor %}</select></div>
-      <div class="full"><label>Адрес</label><input name="address"></div>
-      <div class="full"><label>Комментарий</label><textarea name="notes"></textarea></div>
-      <div class="full"><button class="btn" type="submit">Сохранить</button></div>
+<section class="stats-grid three">
+  <div class="stat-card">
+    <div class="stat-label">Всего клиентов</div>
+    <div class="stat-value">{{ total_clients }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Розничные</div>
+    <div class="stat-value">{{ retail_clients }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Оптовые</div>
+    <div class="stat-value">{{ wholesale_clients }}</div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="toolbar-line">
+    <div class="toolbar-actions">
+      <button class="btn" type="button" onclick="openClientModal('retail')">+ Добавить розничного клиента</button>
+      <button class="btn btn-dark" type="button" onclick="openClientModal('wholesale')">+ Добавить оптового клиента</button>
+    </div>
+
+    <form method="get" action="/clients" class="filters-grid">
+      <div class="field wide">
+        <label>Поиск</label>
+        <input type="text" name="search" value="{{ search }}" placeholder="Имя, телефон, адрес, комментарий">
+      </div>
+
+      <div class="field">
+        <label>Источник</label>
+        <select name="source">
+          <option value="">Все источники</option>
+          {% for item in client_sources %}
+            <option value="{{ item }}" {% if source == item %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Категория</label>
+        <select name="category">
+          <option value="">Все категории</option>
+          {% for item in client_categories %}
+            <option value="{{ item }}" {% if category == item %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Тип клиента</label>
+        <select name="client_type">
+          <option value="">Все типы</option>
+          {% for value, label in client_types %}
+            <option value="{{ value }}" {% if client_type == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <input type="hidden" name="sort_by" value="{{ sort_by }}">
+      <input type="hidden" name="sort_order" value="{{ sort_order }}">
+
+      <div class="filter-actions">
+        <button class="btn btn-light" type="submit">Применить</button>
+        <a class="btn btn-light" href="/clients">Сбросить</a>
+      </div>
     </form>
-  </section>
-  <section class="panel">
-    <h3>База клиентов</h3>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Список клиентов</h3>
+      <p class="panel-note">Нажми на имя клиента, чтобы открыть карточку и посмотреть его историю заказов.</p>
+    </div>
+  </div>
+
+  <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Имя</th><th>Телефон</th><th>Источник</th><th>Категория</th></tr></thead>
+      <thead>
+        <tr>
+          <th>
+            <a href="/clients?search={{ search }}&source={{ source }}&category={{ category }}&client_type={{ client_type }}&sort_by=name&sort_order={% if sort_by == 'name' and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
+              Имя
+            </a>
+          </th>
+          <th>
+            <a href="/clients?search={{ search }}&source={{ source }}&category={{ category }}&client_type={{ client_type }}&sort_by=phone&sort_order={% if sort_by == 'phone' and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
+              Телефон
+            </a>
+          </th>
+          <th>
+            <a href="/clients?search={{ search }}&source={{ source }}&category={{ category }}&client_type={{ client_type }}&sort_by=client_type&sort_order={% if sort_by == 'client_type' and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
+              Тип
+            </a>
+          </th>
+          <th>
+            <a href="/clients?search={{ search }}&source={{ source }}&category={{ category }}&client_type={{ client_type }}&sort_by=source&sort_order={% if sort_by == 'source' and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
+              Источник
+            </a>
+          </th>
+          <th>
+            <a href="/clients?search={{ search }}&source={{ source }}&category={{ category }}&client_type={{ client_type }}&sort_by=category&sort_order={% if sort_by == 'category' and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
+              Категория
+            </a>
+          </th>
+          <th>Адрес</th>
+          <th>
+            <a href="/clients?search={{ search }}&source={{ source }}&category={{ category }}&client_type={{ client_type }}&sort_by=created_at&sort_order={% if sort_by == 'created_at' and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
+              Дата
+            </a>
+          </th>
+        </tr>
+      </thead>
       <tbody>
-      {% for client in clients %}
-      <tr>
-        <td><a href="/clients/{{ client.id }}">{{ client.name }}</a></td>
-        <td>{{ client.phone }}</td>
-        <td>{{ client.source or '—' }}</td>
-        <td>{{ client.category or '—' }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="4">Клиентов пока нет</td></tr>
-      {% endfor %}
+        {% for client in clients %}
+          <tr>
+            <td>
+              <a class="name-link" href="/clients/{{ client.id }}">{{ client.name }}</a>
+            </td>
+            <td>{{ client.phone }}</td>
+            <td>
+              {% if client.client_type == 'wholesale' %}
+                <span class="badge badge-wholesale">Оптовый</span>
+              {% else %}
+                <span class="badge badge-retail">Розничный</span>
+              {% endif %}
+            </td>
+            <td>{{ client.source or '—' }}</td>
+            <td>{{ client.category or '—' }}</td>
+            <td>{{ client.address or '—' }}</td>
+            <td>{{ client.created_at.strftime('%d.%m.%Y') if client.created_at else '—' }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="7">
+              <div class="empty-state">Клиентов пока нет</div>
+            </td>
+          </tr>
+        {% endfor %}
       </tbody>
     </table>
-  </section>
+  </div>
+</section>
+
+<div id="client-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div>
+        <h3 id="client-modal-title">Новый клиент</h3>
+        <p>Заполни данные клиента. Тип подставится автоматически по кнопке.</p>
+      </div>
+      <button type="button" class="icon-btn" onclick="closeClientModal()">×</button>
+    </div>
+
+    <form method="post" action="/clients" class="form-grid">
+      <input type="hidden" name="client_type" id="client_type_input" value="retail">
+
+      <div class="grid-two">
+        <div class="field">
+          <label>Имя</label>
+          <input name="name" required>
+        </div>
+        <div class="field">
+          <label>Телефон</label>
+          <input name="phone" required>
+        </div>
+      </div>
+
+      <div class="grid-two">
+        <div class="field">
+          <label>Источник</label>
+          <select name="source">
+            <option value="">Не выбран</option>
+            {% for item in client_sources %}
+              <option value="{{ item }}">{{ item }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Категория</label>
+          <select name="category">
+            <option value="">Не выбрана</option>
+            {% for item in client_categories %}
+              <option value="{{ item }}">{{ item }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Адрес</label>
+        <input name="address">
+      </div>
+
+      <div class="field">
+        <label>Комментарий</label>
+        <textarea name="notes"></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-light" onclick="closeClientModal()">Отмена</button>
+        <button type="submit" class="btn">Сохранить</button>
+      </div>
+    </form>
+  </div>
 </div>
+
+<script>
+  function openClientModal(type) {
+    const modal = document.getElementById('client-modal');
+    const input = document.getElementById('client_type_input');
+    const title = document.getElementById('client-modal-title');
+
+    input.value = type;
+    title.textContent = type === 'wholesale'
+      ? 'Новый оптовый клиент'
+      : 'Новый розничный клиент';
+
+    modal.classList.remove('hidden');
+  }
+
+  function closeClientModal() {
+    document.getElementById('client-modal').classList.add('hidden');
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeClientModal();
+  });
+
+  document.getElementById('client-modal').addEventListener('click', function (e) {
+    if (e.target.id === 'client-modal') closeClientModal();
+  });
+</script>
 {% endblock %}

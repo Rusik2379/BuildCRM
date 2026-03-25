@@ -4,35 +4,44 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}BuildCRM{% endblock %}</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
 </head>
 <body>
-<div class="layout">
-  <aside class="sidebar">
-    <div class="brand">BuildCRM</div>
-    <nav class="menu">
-      <a href="/dashboard" class="{% if request.url.path == '/dashboard' %}active{% endif %}">Дашборд</a>
-      <a href="/orders/retail" class="{% if request.url.path == '/orders/retail' %}active{% endif %}">Заявки розница</a>
-      <a href="/orders/wholesale" class="{% if request.url.path == '/orders/wholesale' %}active{% endif %}">Заявки опт</a>
-      <a href="/clients" class="{% if request.url.path == '/clients' or request.url.path.startswith('/clients/') %}active{% endif %}">Клиенты</a>
-      <a href="/products" class="{% if request.url.path == '/products' %}active{% endif %}">Номенклатура</a>
-      <a href="/stock" class="{% if request.url.path == '/stock' %}active{% endif %}">Склад</a>
-      <a href="/suppliers" class="{% if request.url.path == '/suppliers' %}active{% endif %}">Поставщики</a>
-      <a href="/drivers" class="{% if request.url.path == '/drivers' %}active{% endif %}">Водители</a>
-      <a href="/finances" class="{% if request.url.path == '/finances' %}active{% endif %}">Финансы</a>
-      <a href="/documents" class="{% if request.url.path == '/documents' %}active{% endif %}">Документы</a>
-    </nav>
-  </aside>
-  <main class="content">
-    <header class="topbar">
-      <div>
-        <h1>{% block page_title %}{% endblock %}</h1>
-        {% block page_subtitle %}{% endblock %}
+  {% set current = request.url.path %}
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-badge">BC</div>
+        <div>
+          <div class="brand-title">BuildCRM</div>
+          <div class="brand-subtitle">Управление продажами</div>
+        </div>
       </div>
-    </header>
-    {% block content %}{% endblock %}
-  </main>
-</div>
-<script src="/static/app.js"></script>
+
+      <nav class="sidebar-nav">
+        <a href="/dashboard" class="{% if current == '/dashboard' %}active{% endif %}">Дашборд</a>
+        <a href="/orders/retail" class="{% if current == '/orders/retail' %}active{% endif %}">Заявки розница</a>
+        <a href="/orders/wholesale" class="{% if current == '/orders/wholesale' %}active{% endif %}">Заявки опт</a>
+        <a href="/clients" class="{% if current.startswith('/clients') %}active{% endif %}">Клиенты</a>
+        <a href="/products" class="{% if current == '/products' %}active{% endif %}">Номенклатура</a>
+        <a href="/stock" class="{% if current == '/stock' %}active{% endif %}">Склад</a>
+        <a href="/suppliers" class="{% if current == '/suppliers' %}active{% endif %}">Поставщики</a>
+        <a href="/drivers" class="{% if current == '/drivers' %}active{% endif %}">Водители</a>
+        <a href="/finances" class="{% if current == '/finances' %}active{% endif %}">Финансы</a>
+        <a href="/documents" class="{% if current == '/documents' %}active{% endif %}">Документы</a>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div>
+          <h1>{% block page_title %}BuildCRM{% endblock %}</h1>
+          <div class="page-subtitle">{% block page_subtitle %}{% endblock %}</div>
+        </div>
+      </header>
+
+      {% block content %}{% endblock %}
+    </main>
+  </div>
 </body>
 </html>
