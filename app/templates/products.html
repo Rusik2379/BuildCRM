@@ -1,48 +1,493 @@
 {% extends 'base.html' %}
+
 {% block title %}Номенклатура{% endblock %}
 {% block page_title %}Номенклатура{% endblock %}
+{% block page_subtitle %}Добавление, поиск, редактирование и удаление позиций{% endblock %}
+
 {% block content %}
-<div class="panel">
-  <form class="filters" method="get">
-    <input type="text" name="search" value="{{ search }}" placeholder="Поиск по названию">
-    <select name="category"><option value="">Все категории</option>{% for item in product_categories %}<option value="{{ item }}" {% if category == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select>
-    <button class="btn btn-light" type="submit">Фильтр</button>
+<style>
+  .products-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+
+  .products-toolbar .left-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .products-toolbar .right-note {
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .products-table-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .btn-small {
+    padding: 9px 12px;
+    font-size: 13px;
+    border-radius: 12px;
+  }
+
+  .btn-danger {
+    background: #dc2626;
+    color: #fff;
+  }
+
+  .btn-danger:hover {
+    background: #b91c1c;
+  }
+
+  .modal-grid {
+    display: grid;
+    gap: 14px;
+  }
+
+  .grid-two {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .field {
+    display: grid;
+    gap: 8px;
+  }
+
+  .field label {
+    font-size: 14px;
+    font-weight: 700;
+    color: #334155;
+  }
+
+  .modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    z-index: 1200;
+  }
+
+  .modal.hidden {
+    display: none;
+  }
+
+  .modal-card {
+    width: min(760px, 100%);
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 26px;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+    padding: 24px;
+    max-height: calc(100vh - 40px);
+    overflow: auto;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: start;
+    margin-bottom: 18px;
+  }
+
+  .modal-header h3 {
+    margin: 0 0 6px;
+    font-size: 24px;
+  }
+
+  .modal-header p {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .icon-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: #fff;
+    cursor: pointer;
+    font-size: 22px;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  .compact-filters {
+    grid-template-columns: minmax(240px, 2fr) minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  }
+
+  @media (max-width: 900px) {
+    .grid-two,
+    .compact-filters {
+      grid-template-columns: 1fr;
+    }
+
+    .products-toolbar {
+      align-items: stretch;
+    }
+
+    .products-toolbar .left-actions .btn {
+      width: 100%;
+    }
+  }
+</style>
+
+<section class="products-toolbar">
+  <div class="left-actions">
+    <button class="btn" type="button" onclick="openCreateModal()">+ Добавить номенклатуру</button>
+  </div>
+  <div class="right-note">
+    Цена продажи указывается при создании заявки
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Поиск и фильтрация</h3>
+      <p class="panel-note">Фильтрация по названию, категории и поставщику.</p>
+    </div>
+  </div>
+
+  <form method="get" action="/products" class="filters-grid compact-filters">
+    <div class="field wide">
+      <label>Поиск</label>
+      <input type="text" name="search" value="{{ search }}" placeholder="Название, описание, категория">
+    </div>
+
+    <div class="field">
+      <label>Категория</label>
+      <select name="category">
+        <option value="">Все категории</option>
+        {% for item in existing_categories %}
+          <option value="{{ item }}" {% if category == item %}selected{% endif %}>{{ item }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Поставщик</label>
+      <select name="supplier_id">
+        <option value="">Все поставщики</option>
+        {% for supplier in suppliers %}
+          <option value="{{ supplier.id }}" {% if supplier_id == supplier.id|string %}selected{% endif %}>{{ supplier.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="filter-actions">
+      <button class="btn btn-light" type="submit">Применить</button>
+      <a class="btn btn-light" href="/products">Сбросить</a>
+    </div>
   </form>
-</div>
-<div class="split two-cols">
-  <section class="panel">
-    <h3>Добавить позицию</h3>
-    <form method="post" action="/products" class="form-grid two-cols">
-      <div class="full"><label>Название</label><input name="name" required></div>
-      <div><label>Категория</label><select name="category"><option value=""></option>{% for item in product_categories %}<option value="{{ item }}">{{ item }}</option>{% endfor %}</select></div>
-      <div><label>Единица</label><select name="unit">{% for item in units %}<option value="{{ item }}">{{ item }}</option>{% endfor %}</select></div>
-      <div><label>Закуп</label><input name="purchase_price" type="number" step="0.01" value="0"></div>
-      <div><label>Розница</label><input name="retail_price" type="number" step="0.01" value="0"></div>
-      <div><label>Мелкий опт</label><input name="small_opt_price" type="number" step="0.01" value="0"></div>
-      <div><label>Крупный опт</label><input name="large_opt_price" type="number" step="0.01" value="0"></div>
-      <div class="toggle-wrap"><label class="toggle-label">Оптовая позиция<input type="checkbox" name="is_wholesale"><span class="toggle"></span></label></div>
-      <div class="full"><label>Описание</label><textarea name="description"></textarea></div>
-      <div class="full"><button class="btn" type="submit">Сохранить</button></div>
-    </form>
-  </section>
-  <section class="panel">
-    <h3>Список товаров</h3>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Вся номенклатура</h3>
+      <p class="panel-note">Можно редактировать или удалять позиции прямо из таблицы.</p>
+    </div>
+  </div>
+
+  <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Название</th><th>Категория</th><th>Закуп</th><th>Розница</th><th>Опт</th></tr></thead>
-      <tbody>
-        {% for item in products %}
+      <thead>
         <tr>
-          <td>{{ item.name }}</td>
-          <td>{{ item.category or '—' }}</td>
-          <td>{{ item.purchase_price }} ₽</td>
-          <td>{{ item.retail_price }} ₽</td>
-          <td>{{ item.small_opt_price }} / {{ item.large_opt_price }} ₽</td>
+          <th>Название</th>
+          <th>Категория</th>
+          <th>Поставщик</th>
+          <th>Единица</th>
+          <th>Цена закупа</th>
+          <th>Описание</th>
+          <th>Дата</th>
+          <th>Действия</th>
         </tr>
+      </thead>
+      <tbody>
+        {% for product in products %}
+          <tr>
+            <td><strong>{{ product.name }}</strong></td>
+            <td>{{ product.category or '—' }}</td>
+            <td>{{ product.supplier.name if product.supplier else '—' }}</td>
+            <td>{{ product.unit }}</td>
+            <td>{{ '%.2f'|format(product.purchase_price or 0) }} ₽</td>
+            <td>{{ product.description or '—' }}</td>
+            <td>{{ product.created_at.strftime('%d.%m.%Y') if product.created_at else '—' }}</td>
+            <td>
+              <div class="products-table-actions">
+                <button
+                  type="button"
+                  class="btn btn-light btn-small"
+                  onclick="openEditModal(
+                    '{{ product.id }}',
+                    '{{ product.name|e }}',
+                    '{{ (product.category or '')|e }}',
+                    '{{ product.unit|e }}',
+                    '{{ '%.2f'|format(product.purchase_price or 0) }}',
+                    '{{ (product.description or '')|e }}',
+                    '{{ product.supplier_id or '' }}'
+                  )"
+                >
+                  Редактировать
+                </button>
+
+                <form method="post" action="/products/{{ product.id }}/delete" onsubmit="return confirm('Удалить эту позицию?')">
+                  <button type="submit" class="btn btn-danger btn-small">Удалить</button>
+                </form>
+              </div>
+            </td>
+          </tr>
         {% else %}
-        <tr><td colspan="5">Позиции пока нет</td></tr>
+          <tr>
+            <td colspan="8">
+              <div class="empty-state">Номенклатура пока не добавлена</div>
+            </td>
+          </tr>
         {% endfor %}
       </tbody>
     </table>
-  </section>
+  </div>
+</section>
+
+<div id="create-product-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div>
+        <h3>Добавить номенклатуру</h3>
+        <p>Можно выбрать существующую категорию и поставщика или сразу ввести свои.</p>
+      </div>
+      <button type="button" class="icon-btn" onclick="closeCreateModal()">×</button>
+    </div>
+
+    <form method="post" action="/products" class="modal-grid">
+      <div class="grid-two">
+        <div class="field">
+          <label>Название</label>
+          <input name="name" required>
+        </div>
+
+        <div class="field">
+          <label>Единица</label>
+          <select name="unit">
+            {% for unit in units %}
+              <option value="{{ unit }}">{{ unit }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="grid-two">
+        <div class="field">
+          <label>Готовая категория</label>
+          <select name="existing_category">
+            <option value="">Не выбрана</option>
+            {% for item in existing_categories %}
+              <option value="{{ item }}">{{ item }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Своя категория</label>
+          <input name="new_category" placeholder="Например: Брус / Доска">
+        </div>
+      </div>
+
+      <div class="grid-two">
+        <div class="field">
+          <label>Готовый поставщик</label>
+          <select name="existing_supplier_id">
+            <option value="">Не выбран</option>
+            {% for supplier in suppliers %}
+              <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Новый поставщик</label>
+          <input name="new_supplier_name" placeholder="Например: База Север">
+        </div>
+      </div>
+
+      <div class="grid-two">
+        <div class="field">
+          <label>Цена закупа</label>
+          <input name="purchase_price" type="number" step="0.01" min="0" value="0">
+        </div>
+
+        <div class="field">
+          <label>Описание</label>
+          <input name="description" placeholder="Краткая информация по позиции">
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-light" onclick="closeCreateModal()">Отмена</button>
+        <button type="submit" class="btn">Сохранить</button>
+      </div>
+    </form>
+  </div>
 </div>
+
+<div id="edit-product-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div>
+        <h3>Редактировать номенклатуру</h3>
+        <p>Можно изменить категорию, поставщика, единицу и закупочную цену.</p>
+      </div>
+      <button type="button" class="icon-btn" onclick="closeEditModal()">×</button>
+    </div>
+
+    <form id="edit-product-form" method="post" class="modal-grid">
+      <div class="grid-two">
+        <div class="field">
+          <label>Название</label>
+          <input id="edit_name" name="name" required>
+        </div>
+
+        <div class="field">
+          <label>Единица</label>
+          <select id="edit_unit" name="unit">
+            {% for unit in units %}
+              <option value="{{ unit }}">{{ unit }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="grid-two">
+        <div class="field">
+          <label>Готовая категория</label>
+          <select id="edit_existing_category" name="existing_category">
+            <option value="">Не выбрана</option>
+            {% for item in existing_categories %}
+              <option value="{{ item }}">{{ item }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Своя категория</label>
+          <input id="edit_new_category" name="new_category" placeholder="Если хочешь заменить категорию вручную">
+        </div>
+      </div>
+
+      <div class="grid-two">
+        <div class="field">
+          <label>Готовый поставщик</label>
+          <select id="edit_existing_supplier_id" name="existing_supplier_id">
+            <option value="">Не выбран</option>
+            {% for supplier in suppliers %}
+              <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Новый поставщик</label>
+          <input id="edit_new_supplier_name" name="new_supplier_name" placeholder="Если нужно создать нового поставщика">
+        </div>
+      </div>
+
+      <div class="grid-two">
+        <div class="field">
+          <label>Цена закупа</label>
+          <input id="edit_purchase_price" name="purchase_price" type="number" step="0.01" min="0">
+        </div>
+
+        <div class="field">
+          <label>Описание</label>
+          <input id="edit_description" name="description">
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-light" onclick="closeEditModal()">Отмена</button>
+        <button type="submit" class="btn">Сохранить изменения</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function openCreateModal() {
+    document.getElementById('create-product-modal').classList.remove('hidden');
+  }
+
+  function closeCreateModal() {
+    document.getElementById('create-product-modal').classList.add('hidden');
+  }
+
+  function openEditModal(id, name, category, unit, purchasePrice, description, supplierId) {
+    const modal = document.getElementById('edit-product-modal');
+    const form = document.getElementById('edit-product-form');
+
+    form.action = `/products/${id}/edit`;
+    document.getElementById('edit_name').value = name || '';
+    document.getElementById('edit_unit').value = unit || 'шт';
+    document.getElementById('edit_purchase_price').value = purchasePrice || '0';
+    document.getElementById('edit_description').value = description || '';
+    document.getElementById('edit_new_category').value = '';
+    document.getElementById('edit_new_supplier_name').value = '';
+
+    const categorySelect = document.getElementById('edit_existing_category');
+    if ([...categorySelect.options].some(option => option.value === category)) {
+      categorySelect.value = category;
+    } else {
+      categorySelect.value = '';
+      document.getElementById('edit_new_category').value = category || '';
+    }
+
+    const supplierSelect = document.getElementById('edit_existing_supplier_id');
+    if (supplierId && [...supplierSelect.options].some(option => option.value === supplierId)) {
+      supplierSelect.value = supplierId;
+    } else {
+      supplierSelect.value = '';
+    }
+
+    modal.classList.remove('hidden');
+  }
+
+  function closeEditModal() {
+    document.getElementById('edit-product-modal').classList.add('hidden');
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      closeCreateModal();
+      closeEditModal();
+    }
+  });
+
+  document.getElementById('create-product-modal').addEventListener('click', function (e) {
+    if (e.target.id === 'create-product-modal') {
+      closeCreateModal();
+    }
+  });
+
+  document.getElementById('edit-product-modal').addEventListener('click', function (e) {
+    if (e.target.id === 'edit-product-modal') {
+      closeEditModal();
+    }
+  });
+</script>
 {% endblock %}

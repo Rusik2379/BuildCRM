@@ -40,7 +40,7 @@ CLIENT_SOURCES = ['Авито', '2ГИС', 'Сарафанка', 'ВК', 'Telegr
 CLIENT_CATEGORIES = ['Частник', 'Бригадир', 'Прораб', 'База', 'Магазин', 'Подрядчик', 'Другое']
 CLIENT_TYPES = [('retail', 'Розничный'), ('wholesale', 'Оптовый')]
 
-PRODUCT_CATEGORIES = ['Кирпич', 'Газоблок', 'Цемент', 'Профлист', 'Утеплитель', 'Розница', 'Опт', 'Другое']
+PRODUCT_CATEGORIES = ['Кирпич', 'Газоблок', 'Цемент', 'Профлист', 'Утеплитель', 'Сухие смеси', 'Пиломатериалы', 'Крепёж', 'Другое']
 UNITS = ['шт', 'м3', 'т', 'кг', 'мешок', 'лист', 'паллета']
 
 ORDER_STATUSES = ['new', 'in_work', 'delivered', 'done', 'canceled']
@@ -52,6 +52,23 @@ PAYMENT_METHODS = [
 ]
 DELIVERY_TYPES = [('pickup', 'Самовывоз'), ('delivery', 'Доставка')]
 PRICING_TIERS = [('retail', 'Розница'), ('small_opt', 'Мелкий опт'), ('large_opt', 'Крупный опт')]
+
+
+def get_or_create_supplier(db: Session, existing_supplier_id: str = '', new_supplier_name: str = '') -> Supplier | None:
+    if new_supplier_name.strip():
+        supplier = db.scalar(select(Supplier).where(Supplier.name == new_supplier_name.strip()).limit(1))
+        if supplier:
+            return supplier
+
+        supplier = Supplier(name=new_supplier_name.strip())
+        db.add(supplier)
+        db.flush()
+        return supplier
+
+    if existing_supplier_id:
+        return db.get(Supplier, int(existing_supplier_id))
+
+    return None
 
 
 @router.get('/')
@@ -276,19 +293,49 @@ def client_detail(request: Request, client_id: int, db: Session = Depends(db_dep
 
 
 @router.get('/products')
-def products_page(request: Request, search: str = '', category: str = '', db: Session = Depends(db_dependency)):
-    query = select(Product).order_by(Product.created_at.desc())
-
-    if search:
-        pattern = f'%{search}%'
-        query = query.where(
-            (Product.name.ilike(pattern)) | (Product.description.ilike(pattern))
-        )
-
-    if category:
-        query = query.where(Product.category == category)
+def products_page(
+    request: Request,
+    search: str = '',
+    category: str = '',
+    supplier_id: str = '',
+    db: Session = Depends(db_dependency),
+):
+    query = (
+        select(Product)
+        .options(joinedload(Product.supplier))
+        .order_by(Product.created_at.desc(), Product.id.desc())
+    )
 
     products = db.scalars(query).all()
+
+    if search:
+        needle = search.strip().casefold()
+        products = [
+            product for product in products
+            if needle in (product.name or '').casefold()
+        ]
+
+    if category:
+        products = [product for product in products if product.category == category]
+
+    if supplier_id:
+        products = [product for product in products if str(product.supplier_id or '') == supplier_id]
+
+    db_categories = db.scalars(
+        select(Product.category)
+        .where(Product.category.is_not(None), Product.category != '')
+        .distinct()
+        .order_by(Product.category.asc())
+    ).all()
+
+    merged_categories = []
+    seen = set()
+    for item in PRODUCT_CATEGORIES + list(db_categories):
+        if item and item not in seen:
+            seen.add(item)
+            merged_categories.append(item)
+
+    suppliers = db.scalars(select(Supplier).order_by(Supplier.name.asc())).all()
 
     return templates.TemplateResponse(
         request,
@@ -297,8 +344,10 @@ def products_page(request: Request, search: str = '', category: str = '', db: Se
             'products': products,
             'search': search,
             'category': category,
-            'product_categories': PRODUCT_CATEGORIES,
+            'supplier_id': supplier_id,
+            'existing_categories': merged_categories,
             'units': UNITS,
+            'suppliers': suppliers,
         },
     )
 
@@ -306,25 +355,93 @@ def products_page(request: Request, search: str = '', category: str = '', db: Se
 @router.post('/products')
 def create_product(
     name: str = Form(...),
-    category: str = Form(''),
+    existing_category: str = Form(''),
+    new_category: str = Form(''),
+    existing_supplier_id: str = Form(''),
+    new_supplier_name: str = Form(''),
     unit: str = Form('шт'),
     description: str = Form(''),
     purchase_price: str = Form('0'),
-    retail_price: str = Form('0'),
-    small_opt_price: str = Form('0'),
-    large_opt_price: str = Form('0'),
-    is_wholesale: bool = Form(False),
     db: Session = Depends(db_dependency),
 ):
-    product = find_or_create_product(db, name, category, unit)
+    final_category = new_category.strip() or existing_category.strip() or None
+    supplier = get_or_create_supplier(db, existing_supplier_id, new_supplier_name)
+
+    product = find_or_create_product(db, name, final_category or '', unit)
+    product.category = final_category
+    product.supplier_id = supplier.id if supplier else None
     product.description = description.strip() or None
     product.purchase_price = to_decimal(purchase_price)
-    product.retail_price = to_decimal(retail_price)
-    product.small_opt_price = to_decimal(small_opt_price)
-    product.large_opt_price = to_decimal(large_opt_price)
-    product.is_wholesale = bool(is_wholesale)
-    db.commit()
 
+    product.retail_price = Decimal('0')
+    product.small_opt_price = Decimal('0')
+    product.large_opt_price = Decimal('0')
+    product.is_wholesale = False
+
+    db.commit()
+    return RedirectResponse('/products', status_code=HTTP_303_SEE_OTHER)
+
+
+@router.post('/products/{product_id}/edit')
+def edit_product(
+    product_id: int,
+    name: str = Form(...),
+    existing_category: str = Form(''),
+    new_category: str = Form(''),
+    existing_supplier_id: str = Form(''),
+    new_supplier_name: str = Form(''),
+    unit: str = Form('шт'),
+    description: str = Form(''),
+    purchase_price: str = Form('0'),
+    db: Session = Depends(db_dependency),
+):
+    product = db.get(Product, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail='Позиция не найдена')
+
+    duplicate = db.scalar(
+        select(Product)
+        .where(Product.name == name.strip(), Product.id != product_id)
+        .limit(1)
+    )
+    if duplicate:
+        raise HTTPException(status_code=400, detail='Позиция с таким названием уже существует')
+
+    final_category = new_category.strip() or existing_category.strip() or None
+    supplier = get_or_create_supplier(db, existing_supplier_id, new_supplier_name)
+
+    product.name = name.strip()
+    product.category = final_category
+    product.supplier_id = supplier.id if supplier else None
+    product.unit = unit.strip() or 'шт'
+    product.description = description.strip() or None
+    product.purchase_price = to_decimal(purchase_price)
+
+    db.commit()
+    return RedirectResponse('/products', status_code=HTTP_303_SEE_OTHER)
+
+
+@router.post('/products/{product_id}/delete')
+def delete_product(product_id: int, db: Session = Depends(db_dependency)):
+    product = db.get(Product, product_id)
+    if not product:
+        return RedirectResponse('/products', status_code=HTTP_303_SEE_OTHER)
+
+    has_stock = db.scalar(
+        select(func.count(StockItem.id)).where(StockItem.product_id == product_id)
+    ) or 0
+    has_order_items = db.scalar(
+        select(func.count(OrderItem.id)).where(OrderItem.product_id == product_id)
+    ) or 0
+
+    if has_stock or has_order_items:
+        raise HTTPException(
+            status_code=400,
+            detail='Нельзя удалить позицию: она уже используется в складе или заказах'
+        )
+
+    db.delete(product)
+    db.commit()
     return RedirectResponse('/products', status_code=HTTP_303_SEE_OTHER)
 
 

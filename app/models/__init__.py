@@ -15,7 +15,7 @@ class Client(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(150), nullable=False, index=True)
     phone: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    client_type: Mapped[str] = mapped_column(String(20), nullable=False, default='retail', index=True)  # retail / wholesale
+    client_type: Mapped[str] = mapped_column(String(20), nullable=False, default='retail', index=True)
     address: Mapped[str | None] = mapped_column(String(255), nullable=True)
     source: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     category: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
@@ -26,6 +26,28 @@ class Client(Base):
 
     orders: Mapped[list['Order']] = relationship(
         back_populates='client',
+        cascade='all, delete-orphan',
+    )
+
+
+class Supplier(Base):
+    __tablename__ = 'suppliers'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(150), nullable=False, index=True)
+    city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+
+    products: Mapped[list['Product']] = relationship(back_populates='supplier')
+    stock_items: Mapped[list['StockItem']] = relationship(back_populates='supplier')
+    orders: Mapped[list['Order']] = relationship(back_populates='supplier')
+    balance_movements: Mapped[list['SupplierBalanceMovement']] = relationship(
+        back_populates='supplier',
         cascade='all, delete-orphan',
     )
 
@@ -43,33 +65,14 @@ class Product(Base):
     small_opt_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
     large_opt_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
     is_wholesale: Mapped[bool] = mapped_column(Boolean, default=False)
+    supplier_id: Mapped[int | None] = mapped_column(ForeignKey('suppliers.id'), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
+    supplier: Mapped['Supplier | None'] = relationship(back_populates='products')
     stock_items: Mapped[list['StockItem']] = relationship(back_populates='product')
     order_items: Mapped[list['OrderItem']] = relationship(back_populates='product')
-
-
-class Supplier(Base):
-    __tablename__ = 'suppliers'
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(150), nullable=False, index=True)
-    city: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
-    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
-    )
-
-    stock_items: Mapped[list['StockItem']] = relationship(back_populates='supplier')
-    orders: Mapped[list['Order']] = relationship(back_populates='supplier')
-    balance_movements: Mapped[list['SupplierBalanceMovement']] = relationship(
-        back_populates='supplier',
-        cascade='all, delete-orphan',
-    )
 
 
 class SupplierBalanceMovement(Base):
@@ -142,7 +145,7 @@ class Order(Base):
     __tablename__ = 'orders'
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    kind: Mapped[str] = mapped_column(String(20), nullable=False, index=True)  # retail / wholesale
+    kind: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default='new', index=True)
     payment_method: Mapped[str] = mapped_column(String(30), nullable=False, default='cash')
     delivery_type: Mapped[str] = mapped_column(String(30), nullable=False, default='pickup')
