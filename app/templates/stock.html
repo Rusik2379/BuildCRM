@@ -1,45 +1,524 @@
 {% extends 'base.html' %}
+
 {% block title %}Склад{% endblock %}
 {% block page_title %}Склад{% endblock %}
+{% block page_subtitle %}Склады, фильтрация и быстрый контроль остатков{% endblock %}
+
 {% block content %}
-<div class="panel">
-  <form class="filters" method="get">
-    <input type="text" name="search" value="{{ search }}" placeholder="Поиск по товару, городу, складу">
-    <select name="warehouse"><option value="">Все склады</option>{% for item in warehouses %}<option value="{{ item }}" {% if warehouse == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select>
-    <button class="btn btn-light" type="submit">Фильтр</button>
+<style>
+  .stock-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+
+  .stock-toolbar .left-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .stock-toolbar .right-note {
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .compact-stock-filters {
+    grid-template-columns: minmax(240px, 2fr) minmax(220px, 1fr) minmax(220px, 1fr) auto;
+  }
+
+  .qty-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .qty-form input {
+    width: 110px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+
+  .qty-form input::-webkit-outer-spin-button,
+  .qty-form input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .stock-int-input {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+
+  .stock-int-input::-webkit-outer-spin-button,
+  .stock-int-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .btn-small {
+    padding: 9px 12px;
+    font-size: 13px;
+    border-radius: 12px;
+  }
+
+  .warehouse-pill {
+    display: inline-flex;
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #4338ca;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    z-index: 1200;
+  }
+
+  .modal.hidden {
+    display: none;
+  }
+
+  .modal-card {
+    width: min(760px, 100%);
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 26px;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+    padding: 24px;
+    max-height: calc(100vh - 40px);
+    overflow: auto;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: start;
+    margin-bottom: 18px;
+  }
+
+  .modal-header h3 {
+    margin: 0 0 6px;
+    font-size: 24px;
+  }
+
+  .modal-header p {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .icon-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: #fff;
+    cursor: pointer;
+    font-size: 22px;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  .grid-two {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .modal-grid {
+    display: grid;
+    gap: 14px;
+  }
+
+  .field {
+    display: grid;
+    gap: 8px;
+  }
+
+  .field label {
+    font-size: 14px;
+    font-weight: 700;
+    color: #334155;
+  }
+
+  .product-search-wrap {
+    position: relative;
+  }
+
+  .product-suggestions {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+    max-height: 240px;
+    overflow: auto;
+    z-index: 10;
+  }
+
+  .product-suggestions.hidden {
+    display: none;
+  }
+
+  .product-option {
+    padding: 12px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid #eef2f7;
+  }
+
+  .product-option:last-child {
+    border-bottom: 0;
+  }
+
+  .product-option:hover {
+    background: #f8fafc;
+  }
+
+  .product-option strong {
+    display: block;
+  }
+
+  .product-option span {
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .selected-product-note {
+    color: #2563eb;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  @media (max-width: 900px) {
+    .compact-stock-filters,
+    .grid-two {
+      grid-template-columns: 1fr;
+    }
+
+    .qty-form {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  }
+</style>
+
+<section class="stock-toolbar">
+  <div class="left-actions">
+    <button class="btn" type="button" onclick="openWarehouseModal()">+ Добавить склад</button>
+    <button class="btn btn-light" type="button" onclick="openStockModal()">+ Добавить товар на склад</button>
+  </div>
+  <div class="right-note">
+    Товары подтягиваются из номенклатуры
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Поиск и фильтрация</h3>
+      <p class="panel-note">Поиск работает по названию товара, фильтр — по складу и категории.</p>
+    </div>
+  </div>
+
+  <form method="get" action="/stock" class="filters-grid compact-stock-filters">
+    <div class="field wide">
+      <label>Поиск</label>
+      <input type="text" name="search" value="{{ search }}" placeholder="Поиск по названию товара">
+    </div>
+
+    <div class="field">
+      <label>Склад</label>
+      <select name="warehouse_id">
+        <option value="">Все склады</option>
+        {% for warehouse in warehouses %}
+          <option value="{{ warehouse.id }}" {% if warehouse_id == warehouse.id|string %}selected{% endif %}>
+            {{ warehouse.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Категория</label>
+      <select name="category">
+        <option value="">Все категории</option>
+        {% for item in categories %}
+          <option value="{{ item }}" {% if category == item %}selected{% endif %}>{{ item }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="filter-actions">
+      <button class="btn btn-light" type="submit">Применить</button>
+      <a class="btn btn-light" href="/stock">Сбросить</a>
+    </div>
   </form>
-</div>
-<div class="split two-cols">
-  <section class="panel">
-    <h3>Добавить остаток</h3>
-    <form method="post" action="/stock" class="form-grid two-cols">
-      <div class="full"><label>Товар</label><select name="product_id" required>{% for item in products %}<option value="{{ item.id }}">{{ item.name }}</option>{% endfor %}</select></div>
-      <div><label>Склад</label><input name="warehouse_name" required></div>
-      <div><label>Город</label><input name="city"></div>
-      <div><label>Поставщик</label><select name="supplier_id"><option value=""></option>{% for item in suppliers %}<option value="{{ item.id }}">{{ item.name }}</option>{% endfor %}</select></div>
-      <div><label>Количество</label><input name="quantity" type="number" step="0.01" value="0"></div>
-      <div class="full"><label>Комментарий</label><textarea name="notes"></textarea></div>
-      <div class="full"><button class="btn" type="submit">Сохранить</button></div>
-    </form>
-  </section>
-  <section class="panel">
-    <h3>Остатки</h3>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Все товары на складах</h3>
+      <p class="panel-note">Остатки теперь только целыми числами.</p>
+    </div>
+  </div>
+
+  <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Товар</th><th>Склад</th><th>Город</th><th>Поставщик</th><th>Остаток</th></tr></thead>
+      <thead>
+        <tr>
+          <th>Товар</th>
+          <th>Категория</th>
+          <th>Склад</th>
+          <th>Расположение</th>
+          <th>Поставщик</th>
+          <th>Остаток</th>
+          <th>Комментарий</th>
+        </tr>
+      </thead>
       <tbody>
         {% for item in stock_items %}
-        <tr>
-          <td>{{ item.product.name }}</td>
-          <td>{{ item.warehouse_name }}</td>
-          <td>{{ item.city or '—' }}</td>
-          <td>{{ item.supplier.name if item.supplier else '—' }}</td>
-          <td>{{ item.quantity }}</td>
-        </tr>
+          <tr>
+            <td><strong>{{ item.product.name }}</strong></td>
+            <td>{{ item.product.category or '—' }}</td>
+            <td><span class="warehouse-pill">{{ item.warehouse.name }}</span></td>
+            <td>{{ item.warehouse.location or '—' }}</td>
+            <td>{{ item.supplier.name if item.supplier else (item.product.supplier.name if item.product.supplier else '—') }}</td>
+            <td>
+              <form method="post" action="/stock/{{ item.id }}/set-quantity" class="qty-form">
+                <input class="stock-int-input" type="number" name="quantity" step="1" min="0" value="{{ (item.quantity or 0)|int }}">
+                <button class="btn btn-light btn-small" type="submit">Сохранить</button>
+              </form>
+            </td>
+            <td>{{ item.notes or '—' }}</td>
+          </tr>
         {% else %}
-        <tr><td colspan="5">Остатков пока нет</td></tr>
+          <tr>
+            <td colspan="7">
+              <div class="empty-state">На складах пока нет товаров</div>
+            </td>
+          </tr>
         {% endfor %}
       </tbody>
     </table>
-  </section>
+  </div>
+</section>
+
+<div id="warehouse-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div>
+        <h3>Добавить склад</h3>
+        <p>Укажи название склада и его местоположение.</p>
+      </div>
+      <button type="button" class="icon-btn" onclick="closeWarehouseModal()">×</button>
+    </div>
+
+    <form method="post" action="/warehouses" class="modal-grid">
+      <div class="grid-two">
+        <div class="field">
+          <label>Название склада</label>
+          <input name="name" required placeholder="Например: Основной склад">
+        </div>
+
+        <div class="field">
+          <label>Местоположение</label>
+          <input name="location" placeholder="Например: Барнаул, ул. Попова, 10">
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-light" onclick="closeWarehouseModal()">Отмена</button>
+        <button type="submit" class="btn">Сохранить склад</button>
+      </div>
+    </form>
+  </div>
 </div>
+
+<div id="stock-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div>
+        <h3>Добавить товар на склад</h3>
+        <p>Начни писать название товара — ниже появятся позиции из номенклатуры.</p>
+      </div>
+      <button type="button" class="icon-btn" onclick="closeStockModal()">×</button>
+    </div>
+
+    <form method="post" action="/stock" class="modal-grid" onsubmit="return validateStockProductSelection()">
+      <input type="hidden" name="product_id" id="selected_product_id">
+
+      <div class="grid-two">
+        <div class="field">
+          <label>Товар</label>
+          <div class="product-search-wrap">
+            <input
+              type="text"
+              id="product_search_input"
+              placeholder="Начни вводить название товара"
+              autocomplete="off"
+              oninput="filterProducts()"
+              onfocus="filterProducts()"
+            >
+            <div id="product_suggestions" class="product-suggestions hidden"></div>
+          </div>
+          <div id="selected_product_note" class="selected-product-note"></div>
+        </div>
+
+        <div class="field">
+          <label>Склад</label>
+          <select name="warehouse_id" required>
+            <option value="">Выбери склад</option>
+            {% for warehouse in warehouses %}
+              <option value="{{ warehouse.id }}">{{ warehouse.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="grid-two">
+        <div class="field">
+          <label>Остаток</label>
+          <input class="stock-int-input" type="number" name="quantity" step="1" min="0" value="0">
+        </div>
+
+        <div class="field">
+          <label>Комментарий</label>
+          <input name="notes" placeholder="Необязательно">
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-light" onclick="closeStockModal()">Отмена</button>
+        <button type="submit" class="btn">Сохранить товар</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  const PRODUCTS = [
+    {% for product in products %}
+      {
+        id: "{{ product.id }}",
+        name: "{{ product.name|e }}",
+        category: "{{ (product.category or '')|e }}",
+        unit: "{{ product.unit|e }}"
+      }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ];
+
+  function openWarehouseModal() {
+    document.getElementById('warehouse-modal').classList.remove('hidden');
+  }
+
+  function closeWarehouseModal() {
+    document.getElementById('warehouse-modal').classList.add('hidden');
+  }
+
+  function openStockModal() {
+    document.getElementById('stock-modal').classList.remove('hidden');
+  }
+
+  function closeStockModal() {
+    document.getElementById('stock-modal').classList.add('hidden');
+  }
+
+  function filterProducts() {
+    const input = document.getElementById('product_search_input');
+    const suggestions = document.getElementById('product_suggestions');
+    const hiddenInput = document.getElementById('selected_product_id');
+    const selectedNote = document.getElementById('selected_product_note');
+    const query = input.value.trim().toLowerCase();
+
+    hiddenInput.value = '';
+    selectedNote.textContent = '';
+
+    if (!query) {
+      suggestions.innerHTML = '';
+      suggestions.classList.add('hidden');
+      return;
+    }
+
+    const matches = PRODUCTS.filter(product =>
+      product.name.toLowerCase().includes(query)
+    ).slice(0, 12);
+
+    if (!matches.length) {
+      suggestions.innerHTML = '<div class="product-option"><strong>Ничего не найдено</strong><span>Проверь название в номенклатуре</span></div>';
+      suggestions.classList.remove('hidden');
+      return;
+    }
+
+    suggestions.innerHTML = matches.map(product => `
+      <div class="product-option" onclick="selectProduct('${product.id}', '${product.name.replace(/'/g, "\\'")}', '${product.category.replace(/'/g, "\\'")}', '${product.unit.replace(/'/g, "\\'")}')">
+        <strong>${product.name}</strong>
+        <span>${product.category || 'Без категории'} • ${product.unit}</span>
+      </div>
+    `).join('');
+
+    suggestions.classList.remove('hidden');
+  }
+
+  function selectProduct(id, name, category, unit) {
+    document.getElementById('selected_product_id').value = id;
+    document.getElementById('product_search_input').value = name;
+    document.getElementById('product_suggestions').classList.add('hidden');
+    document.getElementById('selected_product_note').textContent =
+      `Выбран товар: ${name}${category ? ' • ' + category : ''}${unit ? ' • ' + unit : ''}`;
+  }
+
+  function validateStockProductSelection() {
+    const selectedId = document.getElementById('selected_product_id').value;
+    if (!selectedId) {
+      alert('Выбери товар из списка номенклатуры.');
+      return false;
+    }
+    return true;
+  }
+
+  document.addEventListener('click', function (e) {
+    const suggestions = document.getElementById('product_suggestions');
+    const input = document.getElementById('product_search_input');
+    if (!suggestions.contains(e.target) && e.target !== input) {
+      suggestions.classList.add('hidden');
+    }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      closeWarehouseModal();
+      closeStockModal();
+      document.getElementById('product_suggestions').classList.add('hidden');
+    }
+  });
+
+  document.getElementById('warehouse-modal').addEventListener('click', function (e) {
+    if (e.target.id === 'warehouse-modal') closeWarehouseModal();
+  });
+
+  document.getElementById('stock-modal').addEventListener('click', function (e) {
+    if (e.target.id === 'stock-modal') closeStockModal();
+  });
+</script>
 {% endblock %}

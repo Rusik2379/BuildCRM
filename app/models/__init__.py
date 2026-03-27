@@ -75,6 +75,22 @@ class Product(Base):
     order_items: Mapped[list['OrderItem']] = relationship(back_populates='product')
 
 
+class Warehouse(Base):
+    __tablename__ = 'warehouses'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(150), nullable=False, unique=True, index=True)
+    location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+
+    stock_items: Mapped[list['StockItem']] = relationship(
+        back_populates='warehouse',
+        cascade='all, delete-orphan',
+    )
+
+
 class SupplierBalanceMovement(Base):
     __tablename__ = 'supplier_balance_movements'
 
@@ -128,8 +144,7 @@ class StockItem(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     product_id: Mapped[int] = mapped_column(ForeignKey('products.id'), nullable=False)
-    warehouse_name: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
-    city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    warehouse_id: Mapped[int] = mapped_column(ForeignKey('warehouses.id'), nullable=False)
     supplier_id: Mapped[int | None] = mapped_column(ForeignKey('suppliers.id'), nullable=True)
     quantity: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -138,6 +153,7 @@ class StockItem(Base):
     )
 
     product: Mapped['Product'] = relationship(back_populates='stock_items')
+    warehouse: Mapped['Warehouse'] = relationship(back_populates='stock_items')
     supplier: Mapped['Supplier | None'] = relationship(back_populates='stock_items')
 
 

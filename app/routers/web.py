@@ -21,6 +21,7 @@ from app.models import (
     StockItem,
     Supplier,
     SupplierBalanceMovement,
+    Warehouse,
 )
 from app.services import (
     create_order,
@@ -69,6 +70,14 @@ def get_or_create_supplier(db: Session, existing_supplier_id: str = '', new_supp
         return db.get(Supplier, int(existing_supplier_id))
 
     return None
+
+
+def to_stock_int_decimal(value: str | int | float | Decimal | None) -> Decimal:
+    raw = to_decimal(value, '0')
+    as_int = int(raw)
+    if as_int < 0:
+        as_int = 0
+    return Decimal(as_int)
 
 
 @router.get('/')
@@ -446,32 +455,56 @@ def delete_product(product_id: int, db: Session = Depends(db_dependency)):
 
 
 @router.get('/stock')
-def stock_page(request: Request, search: str = '', warehouse: str = '', db: Session = Depends(db_dependency)):
-    query = (
+def stock_page(
+    request: Request,
+    search: str = '',
+    warehouse_id: str = '',
+    category: str = '',
+    db: Session = Depends(db_dependency),
+):
+    stock_items = db.scalars(
         select(StockItem)
-        .options(joinedload(StockItem.product), joinedload(StockItem.supplier))
-        .order_by(StockItem.updated_at.desc())
-    )
-
-    if warehouse:
-        query = query.where(StockItem.warehouse_name == warehouse)
-
-    stock_items = db.scalars(query).all()
+        .options(
+            joinedload(StockItem.product).joinedload(Product.supplier),
+            joinedload(StockItem.warehouse),
+            joinedload(StockItem.supplier),
+        )
+        .order_by(StockItem.updated_at.desc(), StockItem.id.desc())
+    ).all()
 
     if search:
-        search_lower = search.lower()
+        needle = search.strip().casefold()
         stock_items = [
             item for item in stock_items
-            if search_lower in item.product.name.lower()
-            or search_lower in (item.city or '').lower()
-            or search_lower in item.warehouse_name.lower()
+            if needle in (item.product.name or '').casefold()
         ]
 
-    warehouses = sorted(
-        {item.warehouse_name for item in db.scalars(select(StockItem)).all() if item.warehouse_name}
-    )
-    suppliers = db.scalars(select(Supplier).order_by(Supplier.name)).all()
-    products = db.scalars(select(Product).order_by(Product.name)).all()
+    if warehouse_id:
+        stock_items = [
+            item for item in stock_items
+            if str(item.warehouse_id) == warehouse_id
+        ]
+
+    if category:
+        stock_items = [
+            item for item in stock_items
+            if (item.product.category or '') == category
+        ]
+
+    warehouses = db.scalars(
+        select(Warehouse).order_by(Warehouse.name.asc())
+    ).all()
+
+    products = db.scalars(
+        select(Product).order_by(Product.name.asc())
+    ).all()
+
+    categories = db.scalars(
+        select(Product.category)
+        .where(Product.category.is_not(None), Product.category != '')
+        .distinct()
+        .order_by(Product.category.asc())
+    ).all()
 
     return templates.TemplateResponse(
         request,
@@ -479,33 +512,92 @@ def stock_page(request: Request, search: str = '', warehouse: str = '', db: Sess
         {
             'stock_items': stock_items,
             'warehouses': warehouses,
-            'warehouse': warehouse,
-            'search': search,
-            'suppliers': suppliers,
             'products': products,
+            'categories': categories,
+            'search': search,
+            'warehouse_id': warehouse_id,
+            'category': category,
         },
     )
+
+
+@router.post('/warehouses')
+def create_warehouse(
+    name: str = Form(...),
+    location: str = Form(''),
+    db: Session = Depends(db_dependency),
+):
+    existing = db.scalar(
+        select(Warehouse).where(Warehouse.name == name.strip()).limit(1)
+    )
+    if existing:
+        if location.strip() and not existing.location:
+            existing.location = location.strip()
+            db.commit()
+        return RedirectResponse('/stock', status_code=HTTP_303_SEE_OTHER)
+
+    warehouse = Warehouse(
+        name=name.strip(),
+        location=location.strip() or None,
+    )
+    db.add(warehouse)
+    db.commit()
+    return RedirectResponse('/stock', status_code=HTTP_303_SEE_OTHER)
 
 
 @router.post('/stock')
 def create_stock_item(
     product_id: int = Form(...),
-    warehouse_name: str = Form(...),
-    city: str = Form(''),
-    supplier_id: str = Form(''),
+    warehouse_id: int = Form(...),
     quantity: str = Form('0'),
     notes: str = Form(''),
     db: Session = Depends(db_dependency),
 ):
+    existing = db.scalar(
+        select(StockItem).where(
+            StockItem.product_id == product_id,
+            StockItem.warehouse_id == warehouse_id,
+        ).limit(1)
+    )
+
+    qty = to_stock_int_decimal(quantity)
+
+    if existing:
+        existing.quantity = qty
+        if notes.strip():
+            existing.notes = notes.strip()
+        existing.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        return RedirectResponse('/stock', status_code=HTTP_303_SEE_OTHER)
+
+    product = db.get(Product, product_id)
+    supplier_id = product.supplier_id if product else None
+
     item = StockItem(
         product_id=product_id,
-        warehouse_name=warehouse_name.strip(),
-        city=city.strip() or None,
-        supplier_id=int(supplier_id) if supplier_id else None,
-        quantity=to_decimal(quantity),
+        warehouse_id=warehouse_id,
+        supplier_id=supplier_id,
+        quantity=qty,
         notes=notes.strip() or None,
+        updated_at=datetime.now(timezone.utc),
     )
     db.add(item)
+    db.commit()
+    return RedirectResponse('/stock', status_code=HTTP_303_SEE_OTHER)
+
+
+@router.post('/stock/{stock_item_id}/set-quantity')
+def set_stock_item_quantity(
+    stock_item_id: int,
+    quantity: str = Form(...),
+    db: Session = Depends(db_dependency),
+):
+    item = db.get(StockItem, stock_item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail='Складская позиция не найдена')
+
+    item.quantity = to_stock_int_decimal(quantity)
+    item.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return RedirectResponse('/stock', status_code=HTTP_303_SEE_OTHER)
