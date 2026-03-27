@@ -655,18 +655,85 @@ def supplier_balance(
 
 @router.get('/drivers')
 def drivers_page(request: Request, db: Session = Depends(db_dependency)):
-    drivers = db.scalars(select(Driver).order_by(Driver.name)).all()
-    movements = db.scalars(
+    drivers = db.scalars(
+        select(Driver).order_by(Driver.name.asc())
+    ).all()
+
+    all_movements = db.scalars(
         select(DriverCashMovement)
         .options(joinedload(DriverCashMovement.driver))
         .order_by(DriverCashMovement.created_at.desc())
-        .limit(20)
     ).all()
+
+    movements = all_movements[:40]
+
+    all_driver_orders = db.scalars(
+        select(Order)
+        .options(
+            joinedload(Order.client),
+            joinedload(Order.driver),
+        )
+        .where(Order.driver_id.is_not(None))
+        .order_by(Order.created_at.desc(), Order.id.desc())
+    ).all()
+
+    driver_cards: list[dict] = []
+
+    for driver in drivers:
+        driver_orders = [order for order in all_driver_orders if order.driver_id == driver.id]
+        driver_payment_orders = [
+            order for order in driver_orders
+            if order.payment_method == 'driver_payment' and order.status != 'canceled'
+        ]
+
+        collected_total = sum(
+            (Decimal(order.total_revenue or 0) for order in driver_payment_orders),
+            Decimal('0'),
+        )
+        delivery_total = sum(
+            (Decimal(order.delivery_cost or 0) for order in driver_payment_orders),
+            Decimal('0'),
+        )
+        due_to_company = collected_total - delivery_total
+        if due_to_company < 0:
+            due_to_company = Decimal('0')
+
+        withdrawn_total = sum(
+            (
+                abs(Decimal(movement.amount or 0))
+                for movement in all_movements
+                if movement.driver_id == driver.id and Decimal(movement.amount or 0) < 0
+            ),
+            Decimal('0'),
+        )
+
+        outstanding_due = due_to_company - withdrawn_total
+        if outstanding_due < 0:
+            outstanding_due = Decimal('0')
+
+        driver_cards.append(
+            {
+                'driver': driver,
+                'orders': driver_orders[:5],
+                'driver_payment_orders': driver_payment_orders[:5],
+                'all_orders_count': len(driver_orders),
+                'driver_payment_orders_count': len(driver_payment_orders),
+                'collected_total': collected_total,
+                'delivery_total': delivery_total,
+                'due_to_company': due_to_company,
+                'withdrawn_total': withdrawn_total,
+                'outstanding_due': outstanding_due,
+            }
+        )
 
     return templates.TemplateResponse(
         request,
         'drivers.html',
-        {'drivers': drivers, 'movements': movements},
+        {
+            'drivers': drivers,
+            'driver_cards': driver_cards,
+            'movements': movements,
+        },
     )
 
 
