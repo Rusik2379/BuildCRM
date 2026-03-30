@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -55,6 +55,109 @@ DELIVERY_TYPES = [('pickup', 'Самовывоз'), ('delivery', 'Доставк
 PRICING_TIERS = [('retail', 'Розница'), ('small_opt', 'Мелкий опт'), ('large_opt', 'Крупный опт')]
 
 
+STATUS_LABELS = {
+    'new': 'Новая',
+    'in_work': 'В работе',
+    'delivered': 'Доставлено',
+    'done': 'Завершена',
+    'canceled': 'Отменена',
+}
+
+PAYMENT_LABELS = {
+    'cash': 'Наличными',
+    'card': 'По карте',
+    'driver_payment': 'Оплата водителю',
+    'supplier_balance': 'Балансом поставщика',
+}
+
+DELIVERY_LABELS = {
+    'pickup': 'Самовывоз',
+    'delivery': 'Доставка',
+}
+
+OPERATION_KIND_LABELS = {
+    'order': 'Заявки',
+    'supplier': 'Поставщики',
+    'driver': 'Водители',
+}
+
+RUS_MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
+
+
+def parse_date_bounds(date_from: str = '', date_to: str = '') -> tuple[datetime | None, datetime | None]:
+    start_dt = None
+    end_dt = None
+
+    try:
+        if date_from:
+            start_dt = datetime.combine(date.fromisoformat(date_from), time.min).replace(tzinfo=timezone.utc)
+    except ValueError:
+        start_dt = None
+
+    try:
+        if date_to:
+            end_dt = datetime.combine(date.fromisoformat(date_to) + timedelta(days=1), time.min).replace(tzinfo=timezone.utc)
+    except ValueError:
+        end_dt = None
+
+    return start_dt, end_dt
+
+
+def build_monthly_rows(orders: list[Order], months_back: int = 6) -> list[dict]:
+    now = datetime.now(timezone.utc)
+    months: list[dict] = []
+
+    for offset in range(months_back - 1, -1, -1):
+        month = now.month - offset
+        year = now.year
+
+        while month <= 0:
+            month += 12
+            year -= 1
+
+        start = datetime(year, month, 1, tzinfo=timezone.utc)
+        if month == 12:
+            end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        else:
+            end = datetime(year, month + 1, 1, tzinfo=timezone.utc)
+
+        months.append({
+            'label': f"{RUS_MONTHS[month - 1]} {year}",
+            'start': start,
+            'end': end,
+        })
+
+    rows: list[dict] = []
+    max_value = Decimal('1')
+
+    for month in months:
+        month_orders = [
+            order for order in orders
+            if order.created_at and month['start'] <= order.created_at < month['end']
+        ]
+
+        revenue = sum((Decimal(order.total_revenue or 0) for order in month_orders), Decimal('0'))
+        purchase = sum((Decimal(order.total_purchase or 0) for order in month_orders), Decimal('0'))
+        profit = sum((Decimal(order.total_profit or 0) for order in month_orders), Decimal('0'))
+
+        max_value = max(max_value, revenue, purchase, abs(profit), Decimal('1'))
+
+        rows.append({
+            'label': month['label'],
+            'revenue': revenue,
+            'purchase': purchase,
+            'profit': profit,
+        })
+
+    for row in rows:
+        row['revenue_pct'] = float((row['revenue'] / max_value) * 100) if max_value else 0
+        row['purchase_pct'] = float((row['purchase'] / max_value) * 100) if max_value else 0
+        row['profit_pct'] = float((abs(row['profit']) / max_value) * 100) if max_value else 0
+        row['profit_positive'] = row['profit'] >= 0
+
+    return rows
+
+
 def get_or_create_supplier(db: Session, existing_supplier_id: str = '', new_supplier_name: str = '') -> Supplier | None:
     if new_supplier_name.strip():
         supplier = db.scalar(select(Supplier).where(Supplier.name == new_supplier_name.strip()).limit(1))
@@ -88,11 +191,30 @@ def root():
 @router.get('/dashboard')
 def dashboard(request: Request, db: Session = Depends(db_dependency)):
     stats = dashboard_stats(db)
+
     source_stats = db.execute(
         select(Client.source, func.count(Client.id))
         .group_by(Client.source)
         .order_by(func.count(Client.id).desc())
     ).all()
+
+    all_orders = db.scalars(
+        select(Order).order_by(Order.created_at.asc(), Order.id.asc())
+    ).all()
+
+    total_revenue = sum((Decimal(order.total_revenue or 0) for order in all_orders), Decimal('0'))
+    total_purchase = sum((Decimal(order.total_purchase or 0) for order in all_orders), Decimal('0'))
+    total_profit = sum((Decimal(order.total_profit or 0) for order in all_orders), Decimal('0'))
+
+    supplier_balance_total = db.scalar(
+        select(func.coalesce(func.sum(Supplier.balance), 0))
+    ) or 0
+
+    driver_cash_total = db.scalar(
+        select(func.coalesce(func.sum(Driver.cash_on_hand), 0))
+    ) or 0
+
+    monthly_rows = build_monthly_rows(all_orders)
 
     return templates.TemplateResponse(
         request,
@@ -100,6 +222,12 @@ def dashboard(request: Request, db: Session = Depends(db_dependency)):
         {
             'stats': stats,
             'source_stats': source_stats,
+            'total_revenue': total_revenue,
+            'total_purchase': total_purchase,
+            'total_profit': total_profit,
+            'supplier_balance_total': Decimal(supplier_balance_total or 0),
+            'driver_cash_total': Decimal(driver_cash_total or 0),
+            'monthly_rows': monthly_rows,
         },
     )
 
@@ -769,9 +897,21 @@ def driver_cash(
 
 
 @router.get('/orders/{kind}')
-def orders_page(request: Request, kind: str, status: str = '', db: Session = Depends(db_dependency)):
+def orders_page(
+    request: Request,
+    kind: str,
+    status: str = '',
+    payment_method: str = '',
+    search: str = '',
+    date_from: str = '',
+    date_to: str = '',
+    db: Session = Depends(db_dependency),
+):
+    start_dt, end_dt = parse_date_bounds(date_from, date_to)
+
     query = (
         select(Order)
+        .join(Order.client)
         .options(
             joinedload(Order.client),
             joinedload(Order.driver),
@@ -785,10 +925,31 @@ def orders_page(request: Request, kind: str, status: str = '', db: Session = Dep
     if status:
         query = query.where(Order.status == status)
 
+    if payment_method:
+        query = query.where(Order.payment_method == payment_method)
+
+    if search.strip():
+        pattern = f"%{search.strip()}%"
+        query = query.where(
+            or_(
+                Client.name.ilike(pattern),
+                Client.phone.ilike(pattern),
+                Client.address.ilike(pattern),
+                Client.category.ilike(pattern),
+            )
+        )
+
+    if start_dt:
+        query = query.where(Order.created_at >= start_dt)
+
+    if end_dt:
+        query = query.where(Order.created_at < end_dt)
+
     orders = db.scalars(query).unique().all()
     drivers = db.scalars(select(Driver).order_by(Driver.name)).all()
     suppliers = db.scalars(select(Supplier).order_by(Supplier.name)).all()
     products = db.scalars(select(Product).order_by(Product.name)).all()
+    clients = db.scalars(select(Client).order_by(Client.name)).all()
 
     return templates.TemplateResponse(
         request,
@@ -797,17 +958,24 @@ def orders_page(request: Request, kind: str, status: str = '', db: Session = Dep
             'kind': kind,
             'orders': orders,
             'status': status,
+            'payment_method': payment_method,
+            'search': search,
+            'date_from': date_from,
+            'date_to': date_to,
             'order_statuses': ORDER_STATUSES,
             'payment_methods': PAYMENT_METHODS,
             'delivery_types': DELIVERY_TYPES,
             'pricing_tiers': PRICING_TIERS,
             'products': products,
+            'clients': clients,
             'client_categories': CLIENT_CATEGORIES,
             'drivers': drivers,
             'suppliers': suppliers,
+            'status_labels': STATUS_LABELS,
+            'payment_labels': PAYMENT_LABELS,
+            'delivery_labels': DELIVERY_LABELS,
         },
     )
-
 
 @router.post('/orders/{kind}')
 def create_order_route(
@@ -863,25 +1031,44 @@ def create_order_route(
     return RedirectResponse(f'/orders/{kind}', status_code=HTTP_303_SEE_OTHER)
 
 @router.get('/finances')
-def finances_page(request: Request, db: Session = Depends(db_dependency)):
-    stats = dashboard_stats(db)
+def finances_page(
+    request: Request,
+    date_from: str = '',
+    date_to: str = '',
+    operation_kind: str = '',
+    db: Session = Depends(db_dependency),
+):
+    start_dt, end_dt = parse_date_bounds(date_from, date_to)
 
-    totals = db.execute(
+    order_query = (
+        select(Order)
+        .options(joinedload(Order.client))
+        .order_by(Order.created_at.desc(), Order.id.desc())
+    )
+
+    totals_query = (
         select(
             Order.kind,
             func.coalesce(func.sum(Order.total_revenue), 0),
             func.coalesce(func.sum(Order.total_purchase), 0),
             func.coalesce(func.sum(Order.total_profit), 0),
             func.count(Order.id),
-        ).group_by(Order.kind)
-    ).all()
+        )
+        .group_by(Order.kind)
+    )
 
-    latest_orders = db.scalars(
-        select(Order)
-        .options(joinedload(Order.client))
-        .order_by(Order.created_at.desc(), Order.id.desc())
-        .limit(12)
-    ).all()
+    if start_dt:
+        order_query = order_query.where(Order.created_at >= start_dt)
+        totals_query = totals_query.where(Order.created_at >= start_dt)
+
+    if end_dt:
+        order_query = order_query.where(Order.created_at < end_dt)
+        totals_query = totals_query.where(Order.created_at < end_dt)
+
+    orders_for_operations = db.scalars(order_query.limit(200)).all()
+    totals = db.execute(totals_query).all()
+
+    latest_orders = orders_for_operations[:12]
 
     supplier_balance_total = db.scalar(
         select(func.coalesce(func.sum(Supplier.balance), 0))
@@ -891,26 +1078,31 @@ def finances_page(request: Request, db: Session = Depends(db_dependency)):
         select(func.coalesce(func.sum(Driver.cash_on_hand), 0))
     ) or 0
 
-    supplier_movements = db.scalars(
+    supplier_movements_query = (
         select(SupplierBalanceMovement)
         .options(joinedload(SupplierBalanceMovement.supplier))
         .order_by(SupplierBalanceMovement.created_at.desc(), SupplierBalanceMovement.id.desc())
-        .limit(100)
-    ).all()
-
-    driver_movements = db.scalars(
+    )
+    driver_movements_query = (
         select(DriverCashMovement)
         .options(joinedload(DriverCashMovement.driver))
         .order_by(DriverCashMovement.created_at.desc(), DriverCashMovement.id.desc())
-        .limit(100)
-    ).all()
+    )
 
-    orders_for_operations = db.scalars(
-        select(Order)
-        .options(joinedload(Order.client))
-        .order_by(Order.created_at.desc(), Order.id.desc())
-        .limit(100)
-    ).all()
+    if start_dt:
+        supplier_movements_query = supplier_movements_query.where(SupplierBalanceMovement.created_at >= start_dt)
+        driver_movements_query = driver_movements_query.where(DriverCashMovement.created_at >= start_dt)
+
+    if end_dt:
+        supplier_movements_query = supplier_movements_query.where(SupplierBalanceMovement.created_at < end_dt)
+        driver_movements_query = driver_movements_query.where(DriverCashMovement.created_at < end_dt)
+
+    supplier_movements = db.scalars(supplier_movements_query.limit(200)).all()
+    driver_movements = db.scalars(driver_movements_query.limit(200)).all()
+
+    period_revenue_total = sum((Decimal(item.total_revenue or 0) for item in orders_for_operations), Decimal('0'))
+    period_purchase_total = sum((Decimal(item.total_purchase or 0) for item in orders_for_operations), Decimal('0'))
+    period_profit_total = sum((Decimal(item.total_profit or 0) for item in orders_for_operations), Decimal('0'))
 
     supplier_balance_in = sum(
         (Decimal(item.amount or 0) for item in supplier_movements if Decimal(item.amount or 0) > 0),
@@ -920,6 +1112,7 @@ def finances_page(request: Request, db: Session = Depends(db_dependency)):
         (abs(Decimal(item.amount or 0)) for item in supplier_movements if Decimal(item.amount or 0) < 0),
         Decimal('0'),
     )
+
     driver_cash_in = sum(
         (Decimal(item.amount or 0) for item in driver_movements if Decimal(item.amount or 0) > 0),
         Decimal('0'),
@@ -935,7 +1128,8 @@ def finances_page(request: Request, db: Session = Depends(db_dependency)):
         operations.append(
             {
                 'created_at': item.created_at,
-                'type': 'Заказ',
+                'kind': 'order',
+                'type': 'Заявка',
                 'entity': item.client.name if item.client else '—',
                 'amount': Decimal(item.total_revenue or 0),
                 'direction': 'in',
@@ -947,6 +1141,7 @@ def finances_page(request: Request, db: Session = Depends(db_dependency)):
         operations.append(
             {
                 'created_at': item.created_at,
+                'kind': 'supplier',
                 'type': 'Баланс поставщика',
                 'entity': item.supplier.name if item.supplier else '—',
                 'amount': Decimal(item.amount or 0),
@@ -959,6 +1154,7 @@ def finances_page(request: Request, db: Session = Depends(db_dependency)):
         operations.append(
             {
                 'created_at': item.created_at,
+                'kind': 'driver',
                 'type': 'Деньги водителя',
                 'entity': item.driver.name if item.driver else '—',
                 'amount': Decimal(item.amount or 0),
@@ -967,14 +1163,23 @@ def finances_page(request: Request, db: Session = Depends(db_dependency)):
             }
         )
 
-    operations.sort(key=lambda x: x['created_at'] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
-    operations = operations[:50]
+    if operation_kind:
+        operations = [item for item in operations if item['kind'] == operation_kind]
+
+    operations.sort(
+        key=lambda x: x['created_at'] or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True,
+    )
+    operations = operations[:80]
+
+    chart_orders = list(reversed(orders_for_operations))
+    monthly_rows = build_monthly_rows(chart_orders)
 
     return templates.TemplateResponse(
         request,
         'finances.html',
         {
-            'stats': stats,
+            'stats': dashboard_stats(db),
             'totals': totals,
             'latest_orders': latest_orders,
             'operations': operations,
@@ -984,6 +1189,14 @@ def finances_page(request: Request, db: Session = Depends(db_dependency)):
             'supplier_balance_out': supplier_balance_out,
             'driver_cash_in': driver_cash_in,
             'driver_cash_out': driver_cash_out,
+            'period_revenue_total': period_revenue_total,
+            'period_purchase_total': period_purchase_total,
+            'period_profit_total': period_profit_total,
+            'monthly_rows': monthly_rows,
+            'date_from': date_from,
+            'date_to': date_to,
+            'operation_kind': operation_kind,
+            'operation_kind_labels': OPERATION_KIND_LABELS,
         },
     )
 

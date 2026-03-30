@@ -2,7 +2,7 @@
 
 {% block title %}{{ 'Заявки розница' if kind == 'retail' else 'Заявки опт' }}{% endblock %}
 {% block page_title %}{{ 'Заявки розница' if kind == 'retail' else 'Заявки опт' }}{% endblock %}
-{% block page_subtitle %}Карточки заявок и создание через большое модальное окно{% endblock %}
+{% block page_subtitle %}Карточки заявок, фильтрация и создание через модальное окно{% endblock %}
 
 {% block content %}
 <style>
@@ -15,17 +15,12 @@
     flex-wrap: wrap;
   }
 
-  .orders-toolbar .left-actions {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-
   .order-filter-form {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(220px, 1.4fr) minmax(180px, 1fr) minmax(180px, 1fr) 170px 170px auto;
     gap: 10px;
     align-items: end;
-    flex-wrap: wrap;
+    width: 100%;
   }
 
   .order-grid {
@@ -45,7 +40,7 @@
   .order-head {
     display: flex;
     justify-content: space-between;
-    gap: 10px;
+    gap: 12px;
     align-items: start;
     margin-bottom: 12px;
   }
@@ -53,7 +48,7 @@
   .order-title {
     margin: 0;
     font-size: 20px;
-    line-height: 1.1;
+    line-height: 1.15;
   }
 
   .order-meta {
@@ -130,6 +125,30 @@
     font-size: 13px;
   }
 
+  .badge-soft {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+    background: #e0f2fe;
+    color: #075985;
+  }
+
+  .badge-soft-gray {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+    background: #f1f5f9;
+    color: #475569;
+  }
+
   .modal {
     position: fixed;
     inset: 0;
@@ -145,7 +164,7 @@
   }
 
   .modal-card {
-    width: min(1080px, 100%);
+    width: min(1120px, 100%);
     background: #fff;
     border: 1px solid var(--line);
     border-radius: 26px;
@@ -233,7 +252,7 @@
 
   .item-row {
     display: grid;
-    grid-template-columns: minmax(240px, 2fr) 120px 140px auto;
+    grid-template-columns: minmax(280px, 2fr) minmax(160px, 1fr) 120px 140px auto;
     gap: 10px;
     align-items: end;
     padding: 12px;
@@ -258,33 +277,13 @@
     gap: 10px;
   }
 
-  .badge-soft {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 6px 10px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 800;
-    background: #e0f2fe;
-    color: #075985;
-  }
-
-  .badge-soft-gray {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 6px 10px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 800;
-    background: #f1f5f9;
-    color: #475569;
-  }
-
-  @media (max-width: 1100px) {
+  @media (max-width: 1200px) {
     .order-grid {
       grid-template-columns: 1fr 1fr;
+    }
+
+    .order-filter-form {
+      grid-template-columns: 1fr 1fr 1fr;
     }
 
     .item-row {
@@ -296,6 +295,7 @@
     .order-grid,
     .grid-two,
     .grid-three,
+    .order-filter-form,
     .item-row {
       grid-template-columns: 1fr;
     }
@@ -303,22 +303,50 @@
 </style>
 
 <section class="orders-toolbar">
-  <div class="left-actions">
-    <button class="btn" type="button" onclick="openOrderModal()">+ Добавить заявку</button>
-  </div>
+  <button class="btn" type="button" onclick="openOrderModal()">+ Добавить заявку</button>
 
   <form method="get" action="/orders/{{ kind }}" class="order-filter-form">
+    <div class="field">
+      <label>Поиск</label>
+      <input type="text" name="search" value="{{ search }}" placeholder="Клиент, телефон, адрес, категория">
+    </div>
+
     <div class="field">
       <label>Статус</label>
       <select name="status">
         <option value="">Все статусы</option>
         {% for item in order_statuses %}
-          <option value="{{ item }}" {% if status == item %}selected{% endif %}>{{ item }}</option>
+          <option value="{{ item }}" {% if status == item %}selected{% endif %}>
+            {{ status_labels[item] if item in status_labels else item }}
+          </option>
         {% endfor %}
       </select>
     </div>
-    <button class="btn btn-light" type="submit">Фильтр</button>
-    <a class="btn btn-light" href="/orders/{{ kind }}">Сбросить</a>
+
+    <div class="field">
+      <label>Оплата</label>
+      <select name="payment_method">
+        <option value="">Все способы</option>
+        {% for key, label in payment_methods %}
+          <option value="{{ key }}" {% if payment_method == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Дата от</label>
+      <input type="date" name="date_from" value="{{ date_from }}">
+    </div>
+
+    <div class="field">
+      <label>Дата до</label>
+      <input type="date" name="date_to" value="{{ date_to }}">
+    </div>
+
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <button class="btn btn-light" type="submit">Фильтр</button>
+      <a class="btn btn-light" href="/orders/{{ kind }}">Сбросить</a>
+    </div>
   </form>
 </section>
 
@@ -326,7 +354,7 @@
   <div class="panel-head">
     <div>
       <h3>Список заявок</h3>
-      <p class="panel-note">Источник клиента убран из заявки. Категория клиента сохранена.</p>
+      <p class="panel-note">Категория клиента сохранена, источник из заявки убран.</p>
     </div>
   </div>
 
@@ -340,48 +368,19 @@
               {{ order.created_at.strftime('%d.%m.%Y %H:%M') if order.created_at else '—' }}
             </div>
           </div>
-          <div class="order-status">{{ order.status }}</div>
+          <div class="order-status">{{ status_labels[order.status] if order.status in status_labels else order.status }}</div>
         </div>
 
         <div class="order-info">
-          <div class="order-info-row">
-            <span>Категория клиента</span>
-            <strong>{{ order.client.category or '—' }}</strong>
-          </div>
-          <div class="order-info-row">
-            <span>Телефон</span>
-            <strong>{{ order.client.phone or '—' }}</strong>
-          </div>
-          <div class="order-info-row">
-            <span>Адрес</span>
-            <strong>{{ order.client.address or '—' }}</strong>
-          </div>
-          <div class="order-info-row">
-            <span>Оплата</span>
-            <strong>
-              {% if order.payment_method == 'driver_payment' %}
-                <span class="badge-soft">Водителю</span>
-              {% else %}
-                <span class="badge-soft-gray">{{ order.payment_method }}</span>
-              {% endif %}
-            </strong>
-          </div>
-          <div class="order-info-row">
-            <span>Поставщик</span>
-            <strong>{{ order.supplier.name if order.supplier else '—' }}</strong>
-          </div>
-          <div class="order-info-row">
-            <span>Водитель</span>
-            <strong>{{ order.driver.name if order.driver else '—' }}</strong>
-          </div>
-          <div class="order-info-row">
-            <span>Выручка</span>
-            <strong>{{ '%.2f'|format(order.total_revenue or 0) }} ₽</strong>
-          </div>
-          <div class="order-info-row">
-            <span>Прибыль</span>
-            <strong>{{ '%.2f'|format(order.total_profit or 0) }} ₽</strong>
-          </div>
+          <div class="order-info-row"><span>Категория клиента</span><strong>{{ order.client.category or '—' }}</strong></div>
+          <div class="order-info-row"><span>Телефон</span><strong>{{ order.client.phone or '—' }}</strong></div>
+          <div class="order-info-row"><span>Адрес</span><strong>{{ order.client.address or '—' }}</strong></div>
+          <div class="order-info-row"><span>Оплата</span><strong>{{ payment_labels[order.payment_method] if order.payment_method in payment_labels else order.payment_method }}</strong></div>
+          <div class="order-info-row"><span>Выдача</span><strong>{{ delivery_labels[order.delivery_type] if order.delivery_type in delivery_labels else order.delivery_type }}</strong></div>
+          <div class="order-info-row"><span>Поставщик</span><strong>{{ order.supplier.name if order.supplier else '—' }}</strong></div>
+          <div class="order-info-row"><span>Водитель</span><strong>{{ order.driver.name if order.driver else '—' }}</strong></div>
+          <div class="order-info-row"><span>Выручка</span><strong>{{ '%.2f'|format(order.total_revenue or 0) }} ₽</strong></div>
+          <div class="order-info-row"><span>Прибыль</span><strong>{{ '%.2f'|format(order.total_profit or 0) }} ₽</strong></div>
         </div>
 
         <div class="order-items-title">Товары в заявке</div>
@@ -414,36 +413,43 @@
     <div class="modal-header">
       <div>
         <h3>Новая {{ 'розничная' if kind == 'retail' else 'оптовая' }} заявка</h3>
-        <p>Можно добавить несколько товаров из номенклатуры в одну заявку.</p>
+        <p>Клиента и номенклатуру можно искать прямо вводом текста. В одну заявку можно добавить несколько товаров.</p>
       </div>
       <button type="button" class="icon-btn" onclick="closeOrderModal()">×</button>
     </div>
 
-    <form method="post" action="/orders/{{ kind }}" class="form-grid">
+    <form method="post" action="/orders/{{ kind }}" class="form-grid" onsubmit="return validateOrderForm()">
       <div class="grid-two">
         <div class="field">
           <label>Клиент</label>
-          <input name="client_name" required>
+          <input name="client_name" id="client_name_input" list="clients-list" required oninput="syncClientInfo()">
+          <datalist id="clients-list">
+            {% for client in clients %}
+              <option value="{{ client.name }}">{{ client.phone or '' }}</option>
+            {% endfor %}
+          </datalist>
         </div>
+
         <div class="field">
           <label>Телефон клиента</label>
-          <input name="client_phone">
+          <input name="client_phone" id="client_phone_input">
         </div>
       </div>
 
       <div class="grid-two">
         <div class="field">
           <label>Категория клиента</label>
-          <select name="client_category">
+          <select name="client_category" id="client_category_input">
             <option value="">Не выбрана</option>
             {% for item in client_categories %}
               <option value="{{ item }}">{{ item }}</option>
             {% endfor %}
           </select>
         </div>
+
         <div class="field">
           <label>Адрес</label>
-          <input name="client_address">
+          <input name="client_address" id="client_address_input">
         </div>
       </div>
 
@@ -451,7 +457,7 @@
         <div class="items-head">
           <div>
             <strong>Товары в заявке</strong>
-            <div class="order-meta">Добавляй несколько позиций из номенклатуры</div>
+            <div class="order-meta">Пиши название товара — появятся подходящие варианты из номенклатуры</div>
           </div>
           <button class="btn btn-light" type="button" onclick="addOrderItemRow()">+ Добавить товар</button>
         </div>
@@ -462,7 +468,7 @@
       <div class="grid-three">
         <div class="field">
           <label>Тип цены</label>
-          <select name="pricing_tier">
+          <select name="pricing_tier" id="pricing_tier_select" onchange="syncAllProductPrices()">
             {% for key, label in pricing_tiers %}
               <option value="{{ key }}">{{ label }}</option>
             {% endfor %}
@@ -473,7 +479,7 @@
           <label>Статус</label>
           <select name="status">
             {% for item in order_statuses %}
-              <option value="{{ item }}">{{ item }}</option>
+              <option value="{{ item }}">{{ status_labels[item] if item in status_labels else item }}</option>
             {% endfor %}
           </select>
         </div>
@@ -552,21 +558,38 @@
   </div>
 </div>
 
-<template id="product-options-template">
-  <option value="">Выбери товар</option>
+<datalist id="products-list">
   {% for product in products %}
-    <option
-      value="{{ product.id }}"
-      data-sale="{{ '%.2f'|format(product.retail_price or 0) }}"
-      data-purchase="{{ '%.2f'|format(product.purchase_price or 0) }}"
-      data-unit="{{ product.unit }}"
-    >
-      {{ product.name }}{% if product.category %} — {{ product.category }}{% endif %}
-    </option>
+    <option value="{{ product.name }}">{{ product.category or '' }}</option>
   {% endfor %}
-</template>
+</datalist>
 
 <script>
+  const CLIENTS = [
+    {% for client in clients %}
+      {
+        name: "{{ client.name|e }}",
+        phone: "{{ (client.phone or '')|e }}",
+        address: "{{ (client.address or '')|e }}",
+        category: "{{ (client.category or '')|e }}"
+      }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ];
+
+  const PRODUCTS = [
+    {% for product in products %}
+      {
+        id: "{{ product.id }}",
+        name: "{{ product.name|e }}",
+        unit: "{{ product.unit|e }}",
+        purchase: "{{ '%.2f'|format(product.purchase_price or 0) }}",
+        retail: "{{ '%.2f'|format(product.retail_price or 0) }}",
+        small_opt: "{{ '%.2f'|format(product.small_opt_price or 0) }}",
+        large_opt: "{{ '%.2f'|format(product.large_opt_price or 0) }}"
+      }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ];
+
   function openOrderModal() {
     document.getElementById('order-modal').classList.remove('hidden');
     if (!document.querySelector('.item-row')) {
@@ -578,18 +601,44 @@
     document.getElementById('order-modal').classList.add('hidden');
   }
 
+  function currentTier() {
+    return document.getElementById('pricing_tier_select').value || 'retail';
+  }
+
+  function priceForTier(product, tier) {
+    if (tier === 'small_opt') return product.small_opt;
+    if (tier === 'large_opt') return product.large_opt;
+    return product.retail;
+  }
+
+  function syncClientInfo() {
+    const clientName = document.getElementById('client_name_input').value.trim().toLowerCase();
+    const phoneInput = document.getElementById('client_phone_input');
+    const addressInput = document.getElementById('client_address_input');
+    const categoryInput = document.getElementById('client_category_input');
+
+    const found = CLIENTS.find(item => item.name.toLowerCase() === clientName);
+    if (!found) return;
+
+    if (!phoneInput.value) phoneInput.value = found.phone || '';
+    if (!addressInput.value) addressInput.value = found.address || '';
+    if (!categoryInput.value && found.category) categoryInput.value = found.category;
+  }
+
+  function markManualPrice(input) {
+    input.dataset.manual = '1';
+  }
+
   function addOrderItemRow() {
     const container = document.getElementById('items-list');
-    const options = document.getElementById('product-options-template').innerHTML;
 
     const row = document.createElement('div');
     row.className = 'item-row';
     row.innerHTML = `
       <div class="field">
         <label>Номенклатура</label>
-        <select name="product_ids" onchange="updateOrderRowMeta(this)">
-          ${options}
-        </select>
+        <input type="text" class="js-product-name" list="products-list" placeholder="Начни писать название товара" oninput="syncProductRow(this)">
+        <input type="hidden" name="product_ids" value="">
         <div class="item-row-meta js-row-meta">Выбери товар из номенклатуры</div>
       </div>
 
@@ -600,35 +649,66 @@
 
       <div class="field">
         <label>Цена продажи</label>
-        <input type="number" step="0.01" min="0" name="sale_prices" value="0">
+        <input type="number" step="0.01" min="0" name="sale_prices" value="0" data-manual="0" oninput="markManualPrice(this)">
       </div>
 
-      <button type="button" class="btn btn-light remove-row-btn" onclick="this.parentElement.remove()">Убрать</button>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button type="button" class="btn btn-light remove-row-btn" onclick="this.closest('.item-row').remove()">Убрать</button>
+      </div>
     `;
 
     container.appendChild(row);
   }
 
-  function updateOrderRowMeta(select) {
-    const option = select.options[select.selectedIndex];
-    const row = select.closest('.item-row');
+  function syncProductRow(input) {
+    const row = input.closest('.item-row');
+    const hidden = row.querySelector('input[name="product_ids"]');
     const meta = row.querySelector('.js-row-meta');
     const saleInput = row.querySelector('input[name="sale_prices"]');
+    const value = input.value.trim().toLowerCase();
 
-    if (!option || !option.value) {
-      meta.textContent = 'Выбери товар из номенклатуры';
+    const product = PRODUCTS.find(item => item.name.toLowerCase() === value);
+
+    if (!product) {
+      hidden.value = '';
+      meta.textContent = 'Товар не выбран из номенклатуры';
       return;
     }
 
-    const purchase = option.dataset.purchase || '0.00';
-    const unit = option.dataset.unit || '';
-    const sale = option.dataset.sale || '0.00';
+    hidden.value = product.id;
+    meta.textContent = `Закуп: ${product.purchase} ₽ • Ед.: ${product.unit}`;
 
-    meta.textContent = `Закуп: ${purchase} ₽ • Ед.: ${unit}`;
-
-    if (!saleInput.value || Number(saleInput.value) === 0) {
-      saleInput.value = sale;
+    if (saleInput.dataset.manual !== '1' || !saleInput.value || Number(saleInput.value) === 0) {
+      saleInput.value = priceForTier(product, currentTier());
+      saleInput.dataset.manual = '0';
     }
+  }
+
+  function syncAllProductPrices() {
+    document.querySelectorAll('.item-row').forEach(row => {
+      const nameInput = row.querySelector('.js-product-name');
+      const saleInput = row.querySelector('input[name="sale_prices"]');
+      const value = nameInput.value.trim().toLowerCase();
+      const product = PRODUCTS.find(item => item.name.toLowerCase() === value);
+
+      if (!product) return;
+      if (saleInput.dataset.manual === '1') return;
+
+      saleInput.value = priceForTier(product, currentTier());
+    });
+  }
+
+  function validateOrderForm() {
+    const selectedProducts = [...document.querySelectorAll('input[name="product_ids"]')]
+      .filter(item => item.value.trim());
+
+    if (!selectedProducts.length) {
+      alert('Добавь хотя бы один товар из номенклатуры.');
+      return false;
+    }
+
+    return true;
   }
 
   document.addEventListener('keydown', function (e) {

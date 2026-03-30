@@ -1,28 +1,267 @@
 {% extends 'base.html' %}
+
 {% block title %}Дашборд{% endblock %}
 {% block page_title %}Дашборд{% endblock %}
+{% block page_subtitle %}Общая картина по заказам, закупу и текущим остаткам денег{% endblock %}
+
 {% block content %}
-<div class="stats-grid four">
-  <div class="stat-card"><div class="stat-label">Клиенты</div><div class="stat-value">{{ stats.total_clients }}</div></div>
-  <div class="stat-card"><div class="stat-label">Номенклатура</div><div class="stat-value">{{ stats.total_products }}</div></div>
-  <div class="stat-card"><div class="stat-label">Остаток на складах</div><div class="stat-value">{{ stats.total_stock }}</div></div>
-  <div class="stat-card"><div class="stat-label">Выручка</div><div class="stat-value">{{ '%.2f'|format(stats.revenue) }} ₽</div></div>
-  <div class="stat-card"><div class="stat-label">Прибыль</div><div class="stat-value">{{ '%.2f'|format(stats.profit) }} ₽</div></div>
-  <div class="stat-card"><div class="stat-label">Розничные заявки</div><div class="stat-value">{{ stats.retail_orders }}</div></div>
-  <div class="stat-card"><div class="stat-label">Оптовые заявки</div><div class="stat-value">{{ stats.wholesale_orders }}</div></div>
-  <div class="stat-card"><div class="stat-label">Поставщики / Водители</div><div class="stat-value">{{ stats.total_suppliers }} / {{ stats.total_drivers }}</div></div>
-</div>
-<div class="panel">
-  <h3>Источники клиентов</h3>
-  <table class="table">
-    <thead><tr><th>Источник</th><th>Клиентов</th></tr></thead>
-    <tbody>
-      {% for source, count in source_stats %}
-      <tr><td>{{ source or 'Не указано' }}</td><td>{{ count }}</td></tr>
-      {% else %}
-      <tr><td colspan="2">Пока нет данных</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+<style>
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+
+  .dashboard-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    box-shadow: var(--shadow);
+    padding: 18px;
+  }
+
+  .dashboard-card-label {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+
+  .dashboard-card-value {
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1.05;
+  }
+
+  .chart-legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    display: inline-block;
+    margin-right: 8px;
+  }
+
+  .legend-revenue { background: #2563eb; }
+  .legend-purchase { background: #f59e0b; }
+  .legend-profit { background: #16a34a; }
+  .legend-loss { background: #dc2626; }
+
+  .trend-list {
+    display: grid;
+    gap: 14px;
+  }
+
+  .trend-row {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 14px;
+    align-items: center;
+  }
+
+  .trend-label {
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  .trend-bars {
+    display: grid;
+    gap: 8px;
+  }
+
+  .trend-line {
+    display: grid;
+    grid-template-columns: 80px 1fr 110px;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .trend-line-label {
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .trend-track {
+    height: 10px;
+    border-radius: 999px;
+    background: #eef2f7;
+    overflow: hidden;
+  }
+
+  .trend-bar {
+    height: 100%;
+    border-radius: 999px;
+  }
+
+  .trend-revenue { background: #2563eb; }
+  .trend-purchase { background: #f59e0b; }
+  .trend-profit { background: #16a34a; }
+  .trend-loss { background: #dc2626; }
+
+  .trend-value {
+    text-align: right;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  @media (max-width: 1100px) {
+    .dashboard-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 900px) {
+    .dashboard-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .trend-row,
+    .trend-line {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<section class="dashboard-grid">
+  <div class="dashboard-card">
+    <div class="dashboard-card-label">Клиенты</div>
+    <div class="dashboard-card-value">{{ stats.total_clients }}</div>
+  </div>
+
+  <div class="dashboard-card">
+    <div class="dashboard-card-label">Номенклатура</div>
+    <div class="dashboard-card-value">{{ stats.total_products }}</div>
+  </div>
+
+  <div class="dashboard-card">
+    <div class="dashboard-card-label">Розничные заявки</div>
+    <div class="dashboard-card-value">{{ stats.retail_orders }}</div>
+  </div>
+
+  <div class="dashboard-card">
+    <div class="dashboard-card-label">Оптовые заявки</div>
+    <div class="dashboard-card-value">{{ stats.wholesale_orders }}</div>
+  </div>
+
+  <div class="dashboard-card">
+    <div class="dashboard-card-label">Общая выручка</div>
+    <div class="dashboard-card-value">{{ '%.2f'|format(total_revenue) }} ₽</div>
+  </div>
+
+  <div class="dashboard-card">
+    <div class="dashboard-card-label">Закуп и материалы</div>
+    <div class="dashboard-card-value">{{ '%.2f'|format(total_purchase) }} ₽</div>
+  </div>
+
+  <div class="dashboard-card">
+    <div class="dashboard-card-label">Общая прибыль</div>
+    <div class="dashboard-card-value">{{ '%.2f'|format(total_profit) }} ₽</div>
+  </div>
+
+  <div class="dashboard-card">
+    <div class="dashboard-card-label">Баланс у поставщиков</div>
+    <div class="dashboard-card-value">{{ '%.2f'|format(supplier_balance_total) }} ₽</div>
+  </div>
+
+  <div class="dashboard-card">
+    <div class="dashboard-card-label">Наличка у водителей</div>
+    <div class="dashboard-card-value">{{ '%.2f'|format(driver_cash_total) }} ₽</div>
+  </div>
+
+  <div class="dashboard-card">
+    <div class="dashboard-card-label">Остаток на складе</div>
+    <div class="dashboard-card-value">{{ stats.total_stock }}</div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Финансовая динамика за последние месяцы</h3>
+      <p class="panel-note">Синим — выручка, оранжевым — закуп, зелёным/красным — прибыль или минус.</p>
+    </div>
+  </div>
+
+  <div class="chart-legend">
+    <div><span class="legend-dot legend-revenue"></span>Выручка</div>
+    <div><span class="legend-dot legend-purchase"></span>Закуп</div>
+    <div><span class="legend-dot legend-profit"></span>Прибыль</div>
+    <div><span class="legend-dot legend-loss"></span>Минус</div>
+  </div>
+
+  <div class="trend-list">
+    {% for row in monthly_rows %}
+      <div class="trend-row">
+        <div class="trend-label">{{ row.label }}</div>
+        <div class="trend-bars">
+          <div class="trend-line">
+            <div class="trend-line-label">Выручка</div>
+            <div class="trend-track">
+              <div class="trend-bar trend-revenue" style="width: {{ row.revenue_pct }}%"></div>
+            </div>
+            <div class="trend-value">{{ '%.2f'|format(row.revenue) }} ₽</div>
+          </div>
+
+          <div class="trend-line">
+            <div class="trend-line-label">Закуп</div>
+            <div class="trend-track">
+              <div class="trend-bar trend-purchase" style="width: {{ row.purchase_pct }}%"></div>
+            </div>
+            <div class="trend-value">{{ '%.2f'|format(row.purchase) }} ₽</div>
+          </div>
+
+          <div class="trend-line">
+            <div class="trend-line-label">{{ 'Прибыль' if row.profit_positive else 'Минус' }}</div>
+            <div class="trend-track">
+              <div class="trend-bar {{ 'trend-profit' if row.profit_positive else 'trend-loss' }}" style="width: {{ row.profit_pct }}%"></div>
+            </div>
+            <div class="trend-value">{{ '%.2f'|format(row.profit) }} ₽</div>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Источники клиентов</h3>
+      <p class="panel-note">Оставил существующую сводку по источникам.</p>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Источник</th>
+          <th>Количество</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for source, count in source_stats %}
+          <tr>
+            <td>{{ source or 'Не указан' }}</td>
+            <td>{{ count }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="2">
+              <div class="empty-state">Пока нет данных по источникам</div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
 {% endblock %}
