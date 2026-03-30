@@ -779,7 +779,7 @@ def orders_page(request: Request, kind: str, status: str = '', db: Session = Dep
             joinedload(Order.items).joinedload(OrderItem.product),
         )
         .where(Order.kind == kind)
-        .order_by(Order.created_at.desc())
+        .order_by(Order.created_at.desc(), Order.id.desc())
     )
 
     if status:
@@ -788,6 +788,7 @@ def orders_page(request: Request, kind: str, status: str = '', db: Session = Dep
     orders = db.scalars(query).unique().all()
     drivers = db.scalars(select(Driver).order_by(Driver.name)).all()
     suppliers = db.scalars(select(Supplier).order_by(Supplier.name)).all()
+    products = db.scalars(select(Product).order_by(Product.name)).all()
 
     return templates.TemplateResponse(
         request,
@@ -800,9 +801,7 @@ def orders_page(request: Request, kind: str, status: str = '', db: Session = Dep
             'payment_methods': PAYMENT_METHODS,
             'delivery_types': DELIVERY_TYPES,
             'pricing_tiers': PRICING_TIERS,
-            'product_categories': PRODUCT_CATEGORIES,
-            'units': UNITS,
-            'client_sources': CLIENT_SOURCES,
+            'products': products,
             'client_categories': CLIENT_CATEGORIES,
             'drivers': drivers,
             'suppliers': suppliers,
@@ -816,12 +815,10 @@ def create_order_route(
     client_name: str = Form(...),
     client_phone: str = Form(''),
     client_address: str = Form(''),
-    client_source: str = Form(''),
     client_category: str = Form(''),
-    product_name: str = Form(...),
-    product_category: str = Form(''),
-    product_unit: str = Form('шт'),
-    quantity: str = Form('1'),
+    product_ids: list[str] = Form(...),
+    quantities: list[str] = Form(...),
+    sale_prices: list[str] = Form(...),
     pricing_tier: str = Form('retail'),
     status: str = Form('new'),
     payment_method: str = Form('cash'),
@@ -830,39 +827,45 @@ def create_order_route(
     additional_costs: str = Form('0'),
     supplier_id: str = Form(''),
     driver_id: str = Form(''),
-    use_supplier_balance: bool = Form(False),
+    use_supplier_balance: str | None = Form(None),
     notes: str = Form(''),
     db: Session = Depends(db_dependency),
 ):
-    create_order(
-        db,
-        kind=kind,
-        client_name=client_name,
-        client_phone=client_phone,
-        client_address=client_address,
-        client_source=client_source,
-        client_category=client_category,
-        product_name=product_name,
-        product_category=product_category,
-        product_unit=product_unit,
-        quantity=quantity,
-        pricing_tier=pricing_tier,
-        status=status,
-        payment_method=payment_method,
-        delivery_type=delivery_type,
-        delivery_cost=delivery_cost,
-        additional_costs=additional_costs,
-        notes=notes,
-        supplier_id=supplier_id,
-        driver_id=driver_id,
-        use_supplier_balance=use_supplier_balance,
-    )
-    return RedirectResponse(f'/orders/{kind}', status_code=HTTP_303_SEE_OTHER)
+    valid_product_ids = [item for item in product_ids if str(item).strip()]
+    if not valid_product_ids:
+        raise HTTPException(status_code=400, detail='Добавь хотя бы один товар в заявку')
 
+    try:
+        create_order(
+            db,
+            kind=kind,
+            client_name=client_name,
+            client_phone=client_phone,
+            client_address=client_address,
+            client_category=client_category,
+            product_ids=product_ids,
+            quantities=quantities,
+            sale_prices=sale_prices,
+            pricing_tier=pricing_tier,
+            status=status,
+            payment_method=payment_method,
+            delivery_type=delivery_type,
+            delivery_cost=delivery_cost,
+            additional_costs=additional_costs,
+            notes=notes,
+            supplier_id=supplier_id,
+            driver_id=driver_id,
+            use_supplier_balance=use_supplier_balance is not None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return RedirectResponse(f'/orders/{kind}', status_code=HTTP_303_SEE_OTHER)
 
 @router.get('/finances')
 def finances_page(request: Request, db: Session = Depends(db_dependency)):
     stats = dashboard_stats(db)
+
     totals = db.execute(
         select(
             Order.kind,
@@ -876,9 +879,96 @@ def finances_page(request: Request, db: Session = Depends(db_dependency)):
     latest_orders = db.scalars(
         select(Order)
         .options(joinedload(Order.client))
-        .order_by(Order.created_at.desc())
+        .order_by(Order.created_at.desc(), Order.id.desc())
         .limit(12)
     ).all()
+
+    supplier_balance_total = db.scalar(
+        select(func.coalesce(func.sum(Supplier.balance), 0))
+    ) or 0
+
+    driver_cash_total = db.scalar(
+        select(func.coalesce(func.sum(Driver.cash_on_hand), 0))
+    ) or 0
+
+    supplier_movements = db.scalars(
+        select(SupplierBalanceMovement)
+        .options(joinedload(SupplierBalanceMovement.supplier))
+        .order_by(SupplierBalanceMovement.created_at.desc(), SupplierBalanceMovement.id.desc())
+        .limit(100)
+    ).all()
+
+    driver_movements = db.scalars(
+        select(DriverCashMovement)
+        .options(joinedload(DriverCashMovement.driver))
+        .order_by(DriverCashMovement.created_at.desc(), DriverCashMovement.id.desc())
+        .limit(100)
+    ).all()
+
+    orders_for_operations = db.scalars(
+        select(Order)
+        .options(joinedload(Order.client))
+        .order_by(Order.created_at.desc(), Order.id.desc())
+        .limit(100)
+    ).all()
+
+    supplier_balance_in = sum(
+        (Decimal(item.amount or 0) for item in supplier_movements if Decimal(item.amount or 0) > 0),
+        Decimal('0'),
+    )
+    supplier_balance_out = sum(
+        (abs(Decimal(item.amount or 0)) for item in supplier_movements if Decimal(item.amount or 0) < 0),
+        Decimal('0'),
+    )
+    driver_cash_in = sum(
+        (Decimal(item.amount or 0) for item in driver_movements if Decimal(item.amount or 0) > 0),
+        Decimal('0'),
+    )
+    driver_cash_out = sum(
+        (abs(Decimal(item.amount or 0)) for item in driver_movements if Decimal(item.amount or 0) < 0),
+        Decimal('0'),
+    )
+
+    operations: list[dict] = []
+
+    for item in orders_for_operations:
+        operations.append(
+            {
+                'created_at': item.created_at,
+                'type': 'Заказ',
+                'entity': item.client.name if item.client else '—',
+                'amount': Decimal(item.total_revenue or 0),
+                'direction': 'in',
+                'note': f"{'Розница' if item.kind == 'retail' else 'Опт'} • прибыль {Decimal(item.total_profit or 0):.2f} ₽",
+            }
+        )
+
+    for item in supplier_movements:
+        operations.append(
+            {
+                'created_at': item.created_at,
+                'type': 'Баланс поставщика',
+                'entity': item.supplier.name if item.supplier else '—',
+                'amount': Decimal(item.amount or 0),
+                'direction': 'in' if Decimal(item.amount or 0) >= 0 else 'out',
+                'note': item.reason or 'Изменение баланса поставщика',
+            }
+        )
+
+    for item in driver_movements:
+        operations.append(
+            {
+                'created_at': item.created_at,
+                'type': 'Деньги водителя',
+                'entity': item.driver.name if item.driver else '—',
+                'amount': Decimal(item.amount or 0),
+                'direction': 'in' if Decimal(item.amount or 0) >= 0 else 'out',
+                'note': item.reason or 'Изменение денег у водителя',
+            }
+        )
+
+    operations.sort(key=lambda x: x['created_at'] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    operations = operations[:50]
 
     return templates.TemplateResponse(
         request,
@@ -887,6 +977,13 @@ def finances_page(request: Request, db: Session = Depends(db_dependency)):
             'stats': stats,
             'totals': totals,
             'latest_orders': latest_orders,
+            'operations': operations,
+            'supplier_balance_total': Decimal(supplier_balance_total or 0),
+            'driver_cash_total': Decimal(driver_cash_total or 0),
+            'supplier_balance_in': supplier_balance_in,
+            'supplier_balance_out': supplier_balance_out,
+            'driver_cash_in': driver_cash_in,
+            'driver_cash_out': driver_cash_out,
         },
     )
 

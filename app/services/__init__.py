@@ -40,8 +40,8 @@ def find_or_create_client(
     client_type: str = 'retail',
 ) -> Client:
     phone_norm = normalize_phone(phone)
-
     client = None
+
     if phone_norm:
         client = db.scalar(select(Client).where(Client.phone == phone_norm))
 
@@ -51,16 +51,12 @@ def find_or_create_client(
     if client:
         if address and not client.address:
             client.address = address.strip()
-
         if source and not client.source:
             client.source = source.strip()
-
         if category and not client.category:
             client.category = category.strip()
-
         if client_type == 'wholesale' and client.client_type != 'wholesale':
             client.client_type = 'wholesale'
-
         return client
 
     client = Client(
@@ -115,12 +111,10 @@ def create_order(
     client_name: str,
     client_phone: str,
     client_address: str,
-    client_source: str,
     client_category: str,
-    product_name: str,
-    product_category: str,
-    product_unit: str,
-    quantity: str,
+    product_ids: list[str],
+    quantities: list[str],
+    sale_prices: list[str],
     pricing_tier: str,
     status: str,
     payment_method: str,
@@ -137,16 +131,10 @@ def create_order(
         client_name,
         client_phone,
         client_address,
-        client_source,
-        client_category,
+        source='',
+        category=client_category,
         client_type='wholesale' if kind == 'wholesale' else 'retail',
     )
-
-    product = find_or_create_product(db, product_name, product_category, product_unit)
-
-    qty = to_decimal(quantity, '1')
-    purchase_price = Decimal(product.purchase_price or 0)
-    sale_price = product_price_for_tier(product, pricing_tier)
 
     order = Order(
         kind=kind,
@@ -164,25 +152,54 @@ def create_order(
     db.add(order)
     db.flush()
 
-    item = OrderItem(
-        order=order,
-        product=product,
-        quantity=qty,
-        pricing_tier=pricing_tier,
-        purchase_price=purchase_price,
-        sale_price=sale_price,
-        line_purchase_total=qty * purchase_price,
-        line_sale_total=qty * sale_price,
-    )
-    db.add(item)
-    db.flush()
+    created_items = 0
 
+    for index, product_id in enumerate(product_ids):
+        pid = str(product_id or '').strip()
+        if not pid:
+            continue
+
+        product = db.get(Product, int(pid))
+        if not product:
+            continue
+
+        qty_raw = quantities[index] if index < len(quantities) else '1'
+        sale_raw = sale_prices[index] if index < len(sale_prices) else ''
+
+        qty = to_decimal(qty_raw, '1')
+        if qty <= 0:
+            continue
+
+        purchase_price = Decimal(product.purchase_price or 0)
+
+        fallback_sale = product_price_for_tier(product, pricing_tier)
+        sale_price = to_decimal(sale_raw, str(fallback_sale))
+        if sale_price < 0:
+            sale_price = Decimal('0')
+
+        item = OrderItem(
+            order=order,
+            product=product,
+            quantity=qty,
+            pricing_tier=pricing_tier,
+            purchase_price=purchase_price,
+            sale_price=sale_price,
+            line_purchase_total=qty * purchase_price,
+            line_sale_total=qty * sale_price,
+        )
+        db.add(item)
+        created_items += 1
+
+    if created_items == 0:
+        raise ValueError('Нужно добавить хотя бы один товар')
+
+    db.flush()
     recalculate_order(order)
 
     if order.use_supplier_balance and order.supplier_id:
         supplier = db.get(Supplier, order.supplier_id)
         if supplier:
-            delta = -(item.line_purchase_total or Decimal('0'))
+            delta = -(Decimal(order.total_purchase or 0))
             supplier.balance = Decimal(supplier.balance or 0) + delta
             db.add(
                 SupplierBalanceMovement(
