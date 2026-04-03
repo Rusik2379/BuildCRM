@@ -1,0 +1,447 @@
+{% extends 'base.html' %}
+
+{% block title %}Финансовый учёт{% endblock %}
+{% block page_title %}Финансовый учёт{% endblock %}
+{% block page_subtitle %}Оборот, закуп, наценка, общие расходы и движение денег по выбранному периоду{% endblock %}
+
+{% block content %}
+<style>
+  .finance-filter-form {
+    display: grid;
+    grid-template-columns: 180px 180px 220px auto;
+    gap: 12px;
+    align-items: end;
+    margin-bottom: 18px;
+  }
+
+  .finance-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+
+  .finance-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+    padding: 18px;
+  }
+
+  .finance-card-label {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 10px;
+  }
+
+  .finance-card-value {
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1.05;
+  }
+
+  .finance-card-note {
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .kind-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .kind-card {
+    background: #f8fafc;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 16px;
+  }
+
+  .kind-title {
+    font-size: 18px;
+    font-weight: 800;
+    margin-bottom: 10px;
+  }
+
+  .kind-line {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid #eef2f7;
+  }
+
+  .kind-line:last-child { border-bottom: 0; }
+  .kind-line span { color: var(--muted); }
+
+  .chart-legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    display: inline-block;
+    margin-right: 8px;
+  }
+
+  .legend-revenue { background: #2563eb; }
+  .legend-purchase { background: #f59e0b; }
+  .legend-profit { background: #16a34a; }
+  .legend-loss { background: #dc2626; }
+
+  .trend-list { display: grid; gap: 12px; }
+
+  .trend-row {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 14px;
+    align-items: center;
+  }
+
+  .trend-label { font-weight: 700; }
+  .trend-bars { display: grid; gap: 8px; }
+
+  .trend-line {
+    display: grid;
+    grid-template-columns: 72px 1fr 110px;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .trend-line-label { color: var(--muted); font-size: 13px; }
+
+  .trend-track {
+    height: 10px;
+    border-radius: 999px;
+    background: #eef2f7;
+    overflow: hidden;
+  }
+
+  .trend-bar { height: 100%; border-radius: 999px; }
+  .trend-revenue { background: #2563eb; }
+  .trend-purchase { background: #f59e0b; }
+  .trend-profit { background: #16a34a; }
+  .trend-loss { background: #dc2626; }
+
+  .trend-value {
+    text-align: right;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .operations-table td:nth-child(4) { white-space: nowrap; }
+  .amount-in { color: #15803d; font-weight: 800; }
+  .amount-out { color: #b91c1c; font-weight: 800; }
+  .amount-neutral { color: #0f172a; font-weight: 800; }
+
+  @media (max-width: 1180px) {
+    .finance-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .kind-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .finance-filter-form,
+    .finance-grid,
+    .trend-row,
+    .trend-line {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<section class="panel">
+  <form method="get" action="/finances" class="finance-filter-form">
+    <div class="field">
+      <label>Дата от</label>
+      <input type="date" name="date_from" value="{{ date_from }}">
+    </div>
+    <div class="field">
+      <label>Дата до</label>
+      <input type="date" name="date_to" value="{{ date_to }}">
+    </div>
+    <div class="field">
+      <label>Раздел операций</label>
+      <select name="operation_kind">
+        <option value="">Все разделы</option>
+        {% for key, label in operation_kind_labels.items() %}
+          <option value="{{ key }}" {% if operation_kind == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-actions">
+      <button class="btn btn-light" type="submit">Применить</button>
+      <a class="btn btn-light" href="/finances">Сбросить</a>
+    </div>
+  </form>
+</section>
+
+<section class="finance-grid">
+  <div class="finance-card">
+    <div class="finance-card-label">Оборот за период</div>
+    <div class="finance-card-value">{{ '%.2f'|format(period_revenue_total) }} ₽</div>
+  </div>
+  <div class="finance-card">
+    <div class="finance-card-label">Закуп и материалы</div>
+    <div class="finance-card-value">{{ '%.2f'|format(period_purchase_total) }} ₽</div>
+  </div>
+  <div class="finance-card">
+    <div class="finance-card-label">Чистая прибыль по сделкам</div>
+    <div class="finance-card-value">{{ '%.2f'|format(period_profit_total) }} ₽</div>
+    <div class="finance-card-note">
+      {% set period_markup_pct = ((period_profit_total / period_purchase_total) * 100) if period_purchase_total else 0 %}
+      Наценка: {{ '%.2f'|format(period_markup_pct) }}%
+    </div>
+  </div>
+  <div class="finance-card">
+    <div class="finance-card-label">Общие расходы</div>
+    <div class="finance-card-value">{{ '%.2f'|format(general_expense_total) }} ₽</div>
+  </div>
+  <div class="finance-card">
+    <div class="finance-card-label">Итог после общих расходов</div>
+    <div class="finance-card-value">{{ '%.2f'|format(period_net_profit_total) }} ₽</div>
+  </div>
+  <div class="finance-card">
+    <div class="finance-card-label">Баланс у поставщиков</div>
+    <div class="finance-card-value">{{ '%.2f'|format(supplier_balance_total) }} ₽</div>
+  </div>
+  <div class="finance-card">
+    <div class="finance-card-label">Наличка у водителей</div>
+    <div class="finance-card-value">{{ '%.2f'|format(driver_cash_total) }} ₽</div>
+  </div>
+  <div class="finance-card">
+    <div class="finance-card-label">Пополнения поставщиков</div>
+    <div class="finance-card-value">{{ '%.2f'|format(supplier_balance_in) }} ₽</div>
+  </div>
+  <div class="finance-card">
+    <div class="finance-card-label">Списания поставщиков</div>
+    <div class="finance-card-value">{{ '%.2f'|format(supplier_balance_out) }} ₽</div>
+  </div>
+  <div class="finance-card">
+    <div class="finance-card-label">Операции по водителям</div>
+    <div class="finance-card-value">{{ '%.2f'|format(driver_cash_in - driver_cash_out) }} ₽</div>
+    <div class="finance-card-note">Пришло: {{ '%.2f'|format(driver_cash_in) }} ₽ · Забрали: {{ '%.2f'|format(driver_cash_out) }} ₽</div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Общие расходы</h3>
+      <p class="panel-note">Офис, реклама, зарплаты и прочие затраты, которые уменьшают итоговую прибыль.</p>
+    </div>
+  </div>
+
+  <form method="post" action="/finances/expenses" class="finance-filter-form" style="grid-template-columns: 220px 180px 1fr auto;">
+    <div class="field">
+      <label>Категория</label>
+      <input name="category" placeholder="Офис, Авито, зарплата" required>
+    </div>
+    <div class="field">
+      <label>Сумма</label>
+      <input type="number" name="amount" step="0.01" min="0" required>
+    </div>
+    <div class="field">
+      <label>Комментарий</label>
+      <input name="note" placeholder="За что был расход">
+    </div>
+    <div class="filter-actions">
+      <button class="btn" type="submit">Добавить расход</button>
+    </div>
+  </form>
+
+  <div class="table-wrap operations-table">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Дата</th>
+          <th>Категория</th>
+          <th>Сумма</th>
+          <th>Комментарий</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in general_expenses %}
+          <tr>
+            <td>{{ item.created_at.strftime('%d.%m.%Y %H:%M') if item.created_at else '—' }}</td>
+            <td>{{ item.category }}</td>
+            <td class="amount-out">- {{ '%.2f'|format(item.amount or 0) }} ₽</td>
+            <td>{{ item.note or '—' }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="4"><div class="empty-state">Общих расходов пока нет</div></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Динамика по месяцам</h3>
+      <p class="panel-note">Выручка, закуп и прибыль по месяцам для оценки бюджета.</p>
+    </div>
+  </div>
+
+  <div class="chart-legend">
+    <div><span class="legend-dot legend-revenue"></span>Выручка</div>
+    <div><span class="legend-dot legend-purchase"></span>Закуп</div>
+    <div><span class="legend-dot legend-profit"></span>Прибыль</div>
+    <div><span class="legend-dot legend-loss"></span>Убыток</div>
+  </div>
+
+  <div class="trend-list">
+    {% for row in monthly_rows %}
+      <div class="trend-row">
+        <div class="trend-label">{{ row.label }}</div>
+        <div class="trend-bars">
+          <div class="trend-line">
+            <div class="trend-line-label">Выручка</div>
+            <div class="trend-track"><div class="trend-bar trend-revenue" style="width: {{ row.revenue_pct }}%"></div></div>
+            <div class="trend-value">{{ '%.2f'|format(row.revenue) }} ₽</div>
+          </div>
+          <div class="trend-line">
+            <div class="trend-line-label">Закуп</div>
+            <div class="trend-track"><div class="trend-bar trend-purchase" style="width: {{ row.purchase_pct }}%"></div></div>
+            <div class="trend-value">{{ '%.2f'|format(row.purchase) }} ₽</div>
+          </div>
+          <div class="trend-line">
+            <div class="trend-line-label">Прибыль</div>
+            <div class="trend-track"><div class="trend-bar {% if row.profit_positive %}trend-profit{% else %}trend-loss{% endif %}" style="width: {{ row.profit_pct }}%"></div></div>
+            <div class="trend-value">{{ '%.2f'|format(row.profit) }} ₽</div>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Сводка по типам заявок</h3>
+      <p class="panel-note">Розница и опт отдельно, включая процент прибыли.</p>
+    </div>
+  </div>
+
+  <div class="kind-grid">
+    {% for kind, revenue, purchase, profit, count in totals %}
+      {% set kind_margin = ((profit / revenue) * 100) if revenue else 0 %}
+      <div class="kind-card">
+        <div class="kind-title">{{ 'Розничные заявки' if kind == 'retail' else 'Оптовые заявки' }}</div>
+        <div class="kind-line"><span>Выручка</span><strong>{{ '%.2f'|format(revenue or 0) }} ₽</strong></div>
+        <div class="kind-line"><span>Закуп</span><strong>{{ '%.2f'|format(purchase or 0) }} ₽</strong></div>
+        <div class="kind-line"><span>Прибыль</span><strong>{{ '%.2f'|format(profit or 0) }} ₽</strong></div>
+        <div class="kind-line"><span>Прибыль, %</span><strong>{{ '%.2f'|format(kind_margin) }}%</strong></div>
+        <div class="kind-line"><span>Количество заявок</span><strong>{{ count }}</strong></div>
+      </div>
+    {% else %}
+      <div class="empty-state" style="grid-column: 1 / -1;">Пока нет данных по заявкам</div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Лента финансовых операций</h3>
+      <p class="panel-note">Поступления по заявкам, балансы поставщиков и деньги у водителей.</p>
+    </div>
+  </div>
+
+  <div class="table-wrap operations-table">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Дата</th>
+          <th>Раздел</th>
+          <th>Объект</th>
+          <th>Сумма</th>
+          <th>Комментарий</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in operations %}
+          <tr>
+            <td>{{ item.created_at.strftime('%d.%m.%Y %H:%M') if item.created_at else '—' }}</td>
+            <td>{{ operation_kind_labels[item.kind] if item.kind in operation_kind_labels else item.type }}</td>
+            <td>{{ item.entity }}</td>
+            <td>
+              {% if item.direction == 'in' %}
+                <span class="amount-in">+{{ '%.2f'|format(item.amount or 0) }} ₽</span>
+              {% elif item.direction == 'out' %}
+                <span class="amount-out">{{ '%.2f'|format(item.amount or 0) }} ₽</span>
+              {% else %}
+                <span class="amount-neutral">{{ '%.2f'|format(item.amount or 0) }} ₽</span>
+              {% endif %}
+            </td>
+            <td>{{ item.note or '—' }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="5"><div class="empty-state">Операций пока нет</div></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Последние заявки</h3>
+      <p class="panel-note">Быстрый просмотр последних операций продаж.</p>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Клиент</th>
+          <th>Тип</th>
+          <th>Выручка</th>
+          <th>Прибыль</th>
+          <th>Маржа</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in latest_orders %}
+          {% set item_margin = ((item.total_profit / item.total_revenue) * 100) if item.total_revenue else 0 %}
+          <tr>
+            <td>#{{ item.id }}</td>
+            <td>{{ item.client.name if item.client else '—' }}</td>
+            <td>{{ 'Розница' if item.kind == 'retail' else 'Опт' }}</td>
+            <td>{{ '%.2f'|format(item.total_revenue or 0) }} ₽</td>
+            <td>{{ '%.2f'|format(item.total_profit or 0) }} ₽</td>
+            <td>{{ '%.2f'|format(item_margin) }}%</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="6"><div class="empty-state">Нет заказов</div></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

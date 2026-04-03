@@ -1,176 +1,54 @@
-# BuildCRM Starter
+# BuildCRM Ready
 
-Стартовый каркас для строительной CRM на **Python + FastAPI + PostgreSQL** с отдельным модулем **Telegram-бота**.
+Локальный MVP CRM для стройматериалов на FastAPI + SQLAlchemy + Jinja2.
 
-## Что внутри
+## Что есть
+- Розничные заявки
+- Оптовые заявки
+- Клиенты и карточка клиента
+- Номенклатура
+- Склад
+- Поставщики и баланс
+- Водители и деньги на руках
+- Финансы
+- Документы (заглушка-раздел)
 
-- простой и понятный backend
-- роли: `admin`, `director`, `manager`
-- сущности: пользователи, клиенты, объекты/заказы, задачи, материалы, финансы
-- Telegram-бот только для уведомлений и подтверждений задач
-- Docker Compose для PostgreSQL
-
-## Структура
-
-```text
-build-crm-starter/
-├── app/
-│   ├── api/
-│   │   ├── deps.py
-│   │   └── routes/
-│   │       ├── auth.py
-│   │       ├── clients.py
-│   │       ├── projects.py
-│   │       ├── tasks.py
-│   │       └── stats.py
-│   ├── bot/
-│   │   ├── handlers/
-│   │   │   └── tasks.py
-│   │   ├── keyboards/
-│   │   │   └── task_actions.py
-│   │   └── main.py
-│   ├── core/
-│   │   ├── config.py
-│   │   ├── db.py
-│   │   └── security.py
-│   ├── models/
-│   │   ├── base.py
-│   │   ├── client.py
-│   │   ├── finance.py
-│   │   ├── material.py
-│   │   ├── project.py
-│   │   ├── task.py
-│   │   └── user.py
-│   ├── schemas/
-│   │   ├── auth.py
-│   │   ├── client.py
-│   │   ├── project.py
-│   │   ├── task.py
-│   │   └── user.py
-│   ├── services/
-│   │   ├── auth_service.py
-│   │   ├── notification_service.py
-│   │   ├── stats_service.py
-│   │   └── task_service.py
-│   └── main.py
-├── migrations/
-├── tests/
-├── .env.example
-├── .gitignore
-├── docker-compose.yml
-├── requirements.txt
-└── README.md
-```
-
-## Как запускать локально
-
-### 1. Подними PostgreSQL
-
-```bash
-docker compose up -d
-```
-
-### 2. Создай виртуальное окружение и установи зависимости
-
+## Запуск
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Linux / macOS
+# PowerShell
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-```
-
-### 3. Создай `.env`
-
-```bash
-cp .env.example .env
-```
-
-### 4. Запусти API
-
-```bash
 uvicorn app.main:app --reload
 ```
 
-Документация FastAPI будет на:
+Открыть:
+- http://127.0.0.1:8000/dashboard
 
-- `http://127.0.0.1:8000/docs`
-
-## Как запускать Telegram-бота
-
-После заполнения `TG_BOT_TOKEN`:
-
+## Тесты
 ```bash
-python -m app.bot.main
+pytest -q
 ```
 
-## Логика ролей
+## База данных
+По умолчанию SQLite:
+- `sqlite:///./buildcrm_ready.db`
 
-### Admin
-- управляет системой
-- создаёт пользователей
-- видит всё
+Для изменения можно задать переменную окружения `DATABASE_URL`.
 
-### Director
-- смотрит статистику, финансы, все проекты
-- не обязательно редактирует всё подряд
 
-### Manager
-- ведёт клиентов
-- создаёт объекты/заказы
-- ставит задачи
-- отслеживает выполнение
+Важно: архив рассчитан на распаковку поверх старого проекта тоже; модели и сервисы теперь лежат в app/models/__init__.py и app/services/__init__.py, чтобы не конфликтовать с существующими папками.
 
-## Что делать первым этапом
 
-1. Поднять проект и БД
-2. Создать Alembic-миграции
-3. Реализовать вход по JWT
-4. Сделать CRUD для клиентов
-5. Сделать CRUD для объектов/заказов
-6. Сделать задачи и статусы
-7. Подключить Telegram-уведомления
-8. Добавить dashboard/статистику
+## Демо-данные
+В архив уже включена тестовая база SQLite с заполненными данными:
+- `buildcrm.db`
+- `buildcrm_ready.db`
+- `buildcrm_demo.db`
 
-## Рекомендуемый GitHub-процесс
+По умолчанию `.env` уже указывает на `buildcrm.db`, так что после запуска интерфейс сразу откроется с тестовыми клиентами, заявками, товарами, поставщиками, складом, логистикой и финансами.
 
-### Первый пуш
-
+Чтобы пересоздать демо-базу заново:
 ```bash
-git init
-git branch -M main
-git add .
-git commit -m "Initial project structure"
-git remote add origin git@github.com:YOUR_USERNAME/build-crm.git
-git push -u origin main
+python seed_demo_data.py
 ```
-
-### Ежедневная работа
-
-```bash
-git checkout -b feature/tasks-module
-# работаешь с кодом
-git add .
-git commit -m "Add task service and task routes"
-git push -u origin feature/tasks-module
-```
-
-После этого открываешь Pull Request на GitHub и вливаешь изменения в `main`.
-
-### Полезные правила
-
-- `main` — только стабильный код
-- одна задача = одна ветка
-- коммиты маленькие и понятные
-- `.env` никогда не пушить
-- перед пушем запускать проект локально
-
-## Ближайшая хорошая цель
-
-Сначала сделать только такой MVP:
-
-- авторизация
-- клиенты
-- объекты/заказы
-- задачи
-- Telegram-уведомления по задачам
-
-Без сложного склада, отчётов и бухгалтерии на первом этапе.

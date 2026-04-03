@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}BuildCRM{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+</head>
+<body>
+  {% set current = request.url.path %}
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-badge">BC</div>
+        <div>
+          <div class="brand-title">BuildCRM</div>
+          <div class="brand-subtitle">Панель управления</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="/dashboard" class="{% if current == '/dashboard' %}active{% endif %}">Панель управления</a>
+
+        <details class="sidebar-group" {% if current.startswith('/orders') %}open{% endif %}>
+          <summary class="sidebar-group-toggle">Заявки</summary>
+          <div class="sidebar-subnav">
+            <a href="/orders/retail" class="{% if current == '/orders/retail' %}active{% endif %}">Розничные заявки</a>
+            <a href="/orders/wholesale" class="{% if current == '/orders/wholesale' %}active{% endif %}">Оптовые заявки</a>
+          </div>
+        </details>
+
+        <details class="sidebar-group" {% if current.startswith('/clients') %}open{% endif %}>
+          <summary class="sidebar-group-toggle">Клиентская база</summary>
+          <div class="sidebar-subnav">
+            <a href="/clients?client_type=retail" class="{% if current.startswith('/clients') and request.query_params.get('client_type') == 'retail' %}active{% endif %}">Розничные клиенты</a>
+            <a href="/clients?client_type=wholesale" class="{% if current.startswith('/clients') and request.query_params.get('client_type') == 'wholesale' %}active{% endif %}">Оптовые клиенты</a>
+            <a href="/clients" class="{% if current.startswith('/clients') and not request.query_params.get('client_type') and current == '/clients' %}active{% endif %}">Все клиенты</a>
+          </div>
+        </details>
+
+        <a href="/products" class="{% if current == '/products' %}active{% endif %}">Номенклатура</a>
+        <a href="/stock" class="{% if current == '/stock' %}active{% endif %}">Складской учёт</a>
+        <a href="/suppliers" class="{% if current == '/suppliers' %}active{% endif %}">Поставщики и закупки</a>
+        <a href="/drivers" class="{% if current == '/drivers' %}active{% endif %}">Доставка</a>
+        <a href="/finances" class="{% if current == '/finances' %}active{% endif %}">Финансы</a>
+        <a href="/documents" class="{% if current == '/documents' %}active{% endif %}">Документы</a>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div>
+          <h1>{% block page_title %}BuildCRM{% endblock %}</h1>
+          <div class="page-subtitle">{% block page_subtitle %}{% endblock %}</div>
+        </div>
+      </header>
+
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,467 @@
+{% extends 'base.html' %}
+
+{% block title %}Поставщики{% endblock %}
+{% block page_title %}Поставщики{% endblock %}
+{% block page_subtitle %}Карточки поставщиков и быстрый контроль баланса{% endblock %}
+
+{% block content %}
+<style>
+  .suppliers-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+
+  .suppliers-toolbar .right-note {
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .supplier-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    margin-bottom: 18px;
+  }
+
+  .supplier-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    box-shadow: var(--shadow);
+    padding: 22px;
+  }
+
+  .supplier-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: start;
+    margin-bottom: 14px;
+  }
+
+  .supplier-name {
+    margin: 0;
+    font-size: 24px;
+    line-height: 1.1;
+  }
+
+  .supplier-city {
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .supplier-balance {
+    min-width: 170px;
+    text-align: right;
+  }
+
+  .supplier-balance-label {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+
+  .supplier-balance-value {
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .supplier-meta {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .supplier-meta-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: #f8fafc;
+  }
+
+  .supplier-meta-row span {
+    color: var(--muted);
+  }
+
+  .supplier-meta-row strong {
+    text-align: right;
+    word-break: break-word;
+  }
+
+  .supplier-balance-form {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .supplier-balance-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #334155;
+  }
+
+  .balance-row {
+    display: grid;
+    grid-template-columns: minmax(120px, 160px) 1fr;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .balance-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .balance-input,
+  .reason-input {
+    width: 100%;
+  }
+
+  .btn-small {
+    padding: 10px 12px;
+    font-size: 13px;
+    border-radius: 12px;
+  }
+
+  .btn-minus {
+    background: #fff;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+  }
+
+  .btn-minus:hover {
+    background: #fef2f2;
+  }
+
+  .movements-table {
+    margin-top: 10px;
+  }
+
+  .modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    z-index: 1200;
+  }
+
+  .modal.hidden {
+    display: none;
+  }
+
+  .modal-card {
+    width: min(760px, 100%);
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 26px;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+    padding: 24px;
+    max-height: calc(100vh - 40px);
+    overflow: auto;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: start;
+    margin-bottom: 18px;
+  }
+
+  .modal-header h3 {
+    margin: 0 0 6px;
+    font-size: 24px;
+  }
+
+  .modal-header p {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .icon-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: #fff;
+    cursor: pointer;
+    font-size: 22px;
+  }
+
+  .grid-two {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .modal-grid {
+    display: grid;
+    gap: 14px;
+  }
+
+  .field {
+    display: grid;
+    gap: 8px;
+  }
+
+  .field label {
+    font-size: 14px;
+    font-weight: 700;
+    color: #334155;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  @media (max-width: 980px) {
+    .supplier-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .balance-row {
+      grid-template-columns: 1fr;
+    }
+
+    .grid-two {
+      grid-template-columns: 1fr;
+    }
+
+    .supplier-head {
+      flex-direction: column;
+    }
+
+    .supplier-balance {
+      text-align: left;
+      min-width: 0;
+    }
+
+    .balance-actions {
+      flex-direction: column;
+    }
+  }
+</style>
+
+<section class="suppliers-toolbar">
+  <button class="btn" type="button" onclick="openSupplierModal()">+ Добавить поставщика</button>
+  <div class="right-note">
+    Позже сюда можно будет подвязать списание средств с баланса поставщика в заявках и закупках
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Поставщики</h3>
+      <p class="panel-note">Карточки поставщиков с быстрым пополнением и списанием баланса.</p>
+    </div>
+  </div>
+
+  <div class="supplier-grid">
+    {% for item in suppliers %}
+      <article class="supplier-card">
+        <div class="supplier-head">
+          <div>
+            <h3 class="supplier-name">{{ item.name }}</h3>
+            <div class="supplier-city">{{ item.city or 'Город не указан' }}</div>
+          </div>
+
+          <div class="supplier-balance">
+            <div class="supplier-balance-label">Текущий баланс</div>
+            <div class="supplier-balance-value">{{ '%.2f'|format(item.balance or 0) }} ₽</div>
+          </div>
+        </div>
+
+        <div class="supplier-meta">
+          <div class="supplier-meta-row">
+            <span>Телефон</span>
+            <strong>{{ item.phone or '—' }}</strong>
+          </div>
+          <div class="supplier-meta-row">
+            <span>Комментарий</span>
+            <strong>{{ item.notes or '—' }}</strong>
+          </div>
+        </div>
+
+        <form method="post" action="/suppliers/{{ item.id }}/balance" class="supplier-balance-form" onsubmit="return false;">
+          <input type="hidden" name="amount">
+
+          <div class="supplier-balance-title">Изменить баланс</div>
+
+          <div class="balance-row">
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              class="balance-input js-balance-visible"
+              placeholder="Сумма"
+            >
+            <input
+              type="text"
+              name="reason"
+              class="reason-input"
+              placeholder="Причина, например: пополнение, оплата товара, возврат"
+            >
+          </div>
+
+          <div class="balance-actions">
+            <button type="button" class="btn btn-small" onclick="submitSupplierBalance(this.form, 1)">+ Добавить</button>
+            <button type="button" class="btn btn-small btn-minus" onclick="submitSupplierBalance(this.form, -1)">− Уменьшить</button>
+          </div>
+        </form>
+      </article>
+    {% else %}
+      <div class="empty-state" style="grid-column: 1 / -1;">Поставщиков пока нет</div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Последние движения баланса</h3>
+      <p class="panel-note">История пополнений и списаний по поставщикам.</p>
+    </div>
+  </div>
+
+  <div class="table-wrap movements-table">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Дата</th>
+          <th>Поставщик</th>
+          <th>Сумма</th>
+          <th>Причина</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in movements %}
+          <tr>
+            <td>{{ item.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+            <td>{{ item.supplier.name }}</td>
+            <td>{{ '%.2f'|format(item.amount or 0) }} ₽</td>
+            <td>{{ item.reason or '—' }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="4">
+              <div class="empty-state">Движений пока нет</div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div id="supplier-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div>
+        <h3>Добавить поставщика</h3>
+        <p>Заполни основные данные. Стартовый баланс можно указать сразу.</p>
+      </div>
+      <button type="button" class="icon-btn" onclick="closeSupplierModal()">×</button>
+    </div>
+
+    <form method="post" action="/suppliers" class="modal-grid">
+      <div class="grid-two">
+        <div class="field">
+          <label>Название</label>
+          <input name="name" required>
+        </div>
+
+        <div class="field">
+          <label>Город</label>
+          <input name="city">
+        </div>
+      </div>
+
+      <div class="grid-two">
+        <div class="field">
+          <label>Телефон</label>
+          <input name="phone">
+        </div>
+
+        <div class="field">
+          <label>Стартовый баланс</label>
+          <input type="number" step="0.01" name="balance" value="0">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Комментарий</label>
+        <textarea name="notes"></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-light" onclick="closeSupplierModal()">Отмена</button>
+        <button type="submit" class="btn">Сохранить поставщика</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function openSupplierModal() {
+    document.getElementById('supplier-modal').classList.remove('hidden');
+  }
+
+  function closeSupplierModal() {
+    document.getElementById('supplier-modal').classList.add('hidden');
+  }
+
+  function submitSupplierBalance(form, direction) {
+    const visibleInput = form.querySelector('.js-balance-visible');
+    const reasonInput = form.querySelector('input[name="reason"]');
+    const hiddenAmount = form.querySelector('input[name="amount"]');
+
+    const raw = (visibleInput.value || '').replace(',', '.').trim();
+    if (!raw) {
+      alert('Укажи сумму.');
+      return;
+    }
+
+    const numeric = Math.abs(Number(raw));
+    if (Number.isNaN(numeric)) {
+      alert('Сумма указана некорректно.');
+      return;
+    }
+
+    if (!(reasonInput.value || '').trim()) {
+      alert('Укажи причину изменения баланса.');
+      reasonInput.focus();
+      return;
+    }
+
+    hiddenAmount.value = direction < 0 ? `-${numeric}` : `${numeric}`;
+    form.submit();
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      closeSupplierModal();
+    }
+  });
+
+  document.getElementById('supplier-modal').addEventListener('click', function (e) {
+    if (e.target.id === 'supplier-modal') {
+      closeSupplierModal();
+    }
+  });
+</script>
+{% endblock %}

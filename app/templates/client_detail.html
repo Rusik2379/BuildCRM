@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+
+{% block title %}Карточка клиента{% endblock %}
+{% block page_title %}Карточка клиента{% endblock %}
+{% block page_subtitle %}Редактирование клиента и история его заказов{% endblock %}
+
+{% block content %}
+<section class="client-hero panel">
+  <div class="client-hero-main">
+    <div class="client-title-row">
+      <h2>{{ client.name }}</h2>
+      {% if client.client_type == 'wholesale' %}
+        <span class="badge badge-wholesale">Оптовый</span>
+      {% else %}
+        <span class="badge badge-retail">Розничный</span>
+      {% endif %}
+    </div>
+
+    <div class="client-meta-line">
+      <span>{{ client.phone }}</span>
+      {% if client.source %}<span>• {{ client.source }}</span>{% endif %}
+      {% if client.category %}<span>• {{ client.category }}</span>{% endif %}
+    </div>
+
+    {% if client.address %}
+      <div class="client-address">{{ client.address }}</div>
+    {% endif %}
+  </div>
+
+  <a class="btn btn-light" href="/clients">← Назад к клиентам</a>
+</section>
+
+<section class="stats-grid four">
+  <div class="stat-card">
+    <div class="stat-label">Розничные заявки</div>
+    <div class="stat-value">{{ retail_count }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Оптовые заявки</div>
+    <div class="stat-value">{{ wholesale_count }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Общая выручка</div>
+    <div class="stat-value">{{ '%.2f'|format(total_revenue) }} ₽</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Общая прибыль</div>
+    <div class="stat-value">{{ '%.2f'|format(total_profit) }} ₽</div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Редактирование клиента</h3>
+      <p class="panel-note">Изменения сохраняются сразу в карточку клиента.</p>
+    </div>
+  </div>
+
+  <form method="post" action="/clients/{{ client.id }}/edit" class="form-grid">
+    <div class="grid-two">
+      <div class="field">
+        <label>Имя</label>
+        <input name="name" value="{{ client.name }}" required>
+      </div>
+      <div class="field">
+        <label>Телефон</label>
+        <input name="phone" value="{{ client.phone }}" required>
+      </div>
+    </div>
+
+    <div class="grid-two">
+      <div class="field">
+        <label>Тип клиента</label>
+        <select name="client_type">
+          {% for value, label in client_types %}
+            <option value="{{ value }}" {% if client.client_type == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Источник</label>
+        <select name="source">
+          <option value="">Не выбран</option>
+          {% for item in client_sources %}
+            <option value="{{ item }}" {% if client.source == item %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="grid-two">
+      <div class="field">
+        <label>Категория</label>
+        <select name="category">
+          <option value="">Не выбрана</option>
+          {% for item in client_categories %}
+            <option value="{{ item }}" {% if client.category == item %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Адрес</label>
+        <input name="address" value="{{ client.address or '' }}">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Комментарий</label>
+      <textarea name="notes">{{ client.notes or '' }}</textarea>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn" type="submit">Сохранить изменения</button>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>История заказов</h3>
+      <p class="panel-note">Сначала показываются самые новые заказы.</p>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Тип</th>
+          <th>Статус</th>
+          <th>Оплата</th>
+          <th>Получение</th>
+          <th>Выручка</th>
+          <th>Прибыль</th>
+          <th>Дата</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for order in orders %}
+          <tr>
+            <td>#{{ order.id }}</td>
+            <td>
+              {% if order.kind == 'wholesale' %}
+                <span class="badge badge-wholesale">Опт</span>
+              {% else %}
+                <span class="badge badge-retail">Розница</span>
+              {% endif %}
+            </td>
+            <td>{{ order.status }}</td>
+            <td>{{ order.payment_method }}</td>
+            <td>{{ 'Доставка' if order.delivery_type == 'delivery' else 'Самовывоз' }}</td>
+            <td>{{ '%.2f'|format(order.total_revenue or 0) }} ₽</td>
+            <td>{{ '%.2f'|format(order.total_profit or 0) }} ₽</td>
+            <td>{{ order.created_at.strftime('%d.%m.%Y %H:%M') if order.created_at else '—' }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="8">
+              <div class="empty-state">У клиента пока нет заказов</div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

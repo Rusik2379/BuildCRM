@@ -1,0 +1,599 @@
+{% extends 'base.html' %}
+
+{% block title %}Водители{% endblock %}
+{% block page_title %}Водители{% endblock %}
+{% block page_subtitle %}Учёт денег у водителей и заявок с оплатой водителю{% endblock %}
+
+{% block content %}
+<style>
+  .drivers-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+
+  .drivers-toolbar .right-note {
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .driver-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    margin-bottom: 18px;
+  }
+
+  .driver-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    box-shadow: var(--shadow);
+    padding: 22px;
+  }
+
+  .driver-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: start;
+    margin-bottom: 16px;
+  }
+
+  .driver-name {
+    margin: 0;
+    font-size: 24px;
+    line-height: 1.1;
+  }
+
+  .driver-meta {
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .driver-balance-block {
+    text-align: right;
+    min-width: 160px;
+  }
+
+  .driver-balance-label {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+
+  .driver-balance-value {
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .driver-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .driver-stat {
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: #f8fafc;
+  }
+
+  .driver-stat-label {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+
+  .driver-stat-value {
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1.1;
+  }
+
+  .driver-section-title {
+    margin: 18px 0 10px;
+    font-size: 15px;
+    font-weight: 800;
+    color: #0f172a;
+  }
+
+  .driver-inline-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 14px;
+  }
+
+  .driver-inline-table th,
+  .driver-inline-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #eef2f7;
+    text-align: left;
+    vertical-align: top;
+    font-size: 13px;
+  }
+
+  .driver-inline-table th {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .driver-inline-empty {
+    padding: 14px;
+    border: 1px dashed var(--line);
+    border-radius: 14px;
+    background: #f8fafc;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .driver-balance-form {
+    display: grid;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .driver-balance-row {
+    display: grid;
+    grid-template-columns: minmax(120px, 160px) 1fr;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .driver-balance-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .btn-small {
+    padding: 10px 12px;
+    font-size: 13px;
+    border-radius: 12px;
+  }
+
+  .btn-minus {
+    background: #fff;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+  }
+
+  .btn-minus:hover {
+    background: #fef2f2;
+  }
+
+  .btn-accent {
+    background: #0f172a;
+    color: #fff;
+    border: 1px solid #0f172a;
+  }
+
+  .btn-accent:hover {
+    background: #1e293b;
+  }
+
+  .badge-soft {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+    background: #e0f2fe;
+    color: #075985;
+  }
+
+  .badge-soft-gray {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+    background: #f1f5f9;
+    color: #475569;
+  }
+
+  .modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    z-index: 1200;
+  }
+
+  .modal.hidden {
+    display: none;
+  }
+
+  .modal-card {
+    width: min(760px, 100%);
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 26px;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+    padding: 24px;
+    max-height: calc(100vh - 40px);
+    overflow: auto;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: start;
+    margin-bottom: 18px;
+  }
+
+  .modal-header h3 {
+    margin: 0 0 6px;
+    font-size: 24px;
+  }
+
+  .modal-header p {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .icon-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: #fff;
+    cursor: pointer;
+    font-size: 22px;
+  }
+
+  .grid-two {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .modal-grid {
+    display: grid;
+    gap: 14px;
+  }
+
+  .field {
+    display: grid;
+    gap: 8px;
+  }
+
+  .field label {
+    font-size: 14px;
+    font-weight: 700;
+    color: #334155;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  @media (max-width: 1100px) {
+    .driver-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .driver-stats {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .driver-balance-row,
+    .grid-two,
+    .driver-stats {
+      grid-template-columns: 1fr;
+    }
+
+    .driver-head {
+      flex-direction: column;
+    }
+
+    .driver-balance-block {
+      text-align: left;
+      min-width: 0;
+    }
+
+    .driver-balance-actions {
+      flex-direction: column;
+    }
+  }
+</style>
+
+<section class="drivers-toolbar">
+  <button class="btn" type="button" onclick="openDriverModal()">+ Добавить водителя</button>
+  <div class="right-note">
+    К сдаче считается как оплаты водителю минус доставка
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Водители</h3>
+      <p class="panel-note">Карточки водителей, деньги на руках и заявки с оплатой водителю.</p>
+    </div>
+  </div>
+
+  <div class="driver-grid">
+    {% for card in driver_cards %}
+      <article class="driver-card">
+        <div class="driver-head">
+          <div>
+            <h3 class="driver-name">{{ card.driver.name }}</h3>
+            <div class="driver-meta">
+              {{ card.driver.vehicle or 'Машина не указана' }}
+              {% if card.driver.phone %} • {{ card.driver.phone }}{% endif %}
+            </div>
+          </div>
+
+          <div class="driver-balance-block">
+            <div class="driver-balance-label">На руках по учёту</div>
+            <div class="driver-balance-value">{{ '%.2f'|format(card.driver.cash_on_hand or 0) }} ₽</div>
+          </div>
+        </div>
+
+        <div class="driver-stats">
+          <div class="driver-stat">
+            <div class="driver-stat-label">Всего заявок</div>
+            <div class="driver-stat-value">{{ card.all_orders_count }}</div>
+          </div>
+
+          <div class="driver-stat">
+            <div class="driver-stat-label">Оплат водителю</div>
+            <div class="driver-stat-value">{{ card.driver_payment_orders_count }}</div>
+          </div>
+
+          <div class="driver-stat">
+            <div class="driver-stat-label">Доставка у водителя</div>
+            <div class="driver-stat-value">{{ '%.2f'|format(card.delivery_total) }} ₽</div>
+          </div>
+
+          <div class="driver-stat">
+            <div class="driver-stat-label">Уже забрали</div>
+            <div class="driver-stat-value">{{ '%.2f'|format(card.withdrawn_total) }} ₽</div>
+          </div>
+
+          <div class="driver-stat">
+            <div class="driver-stat-label">К сдаче в компанию</div>
+            <div class="driver-stat-value">{{ '%.2f'|format(card.due_to_company) }} ₽</div>
+          </div>
+
+          <div class="driver-stat">
+            <div class="driver-stat-label">Осталось забрать</div>
+            <div class="driver-stat-value">{{ '%.2f'|format(card.outstanding_due) }} ₽</div>
+          </div>
+        </div>
+
+        <div class="driver-section-title">Последние заявки водителя</div>
+        {% if card.orders %}
+          <table class="driver-inline-table">
+            <thead>
+              <tr>
+                <th>Дата</th>
+                <th>Клиент</th>
+                <th>Статус</th>
+                <th>Оплата</th>
+                <th>К сдаче</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for order in card.orders %}
+                <tr>
+                  <td>{{ order.created_at.strftime('%d.%m.%Y') if order.created_at else '—' }}</td>
+                  <td>{{ order.client.name if order.client else '—' }}</td>
+                  <td>{{ order.status }}</td>
+                  <td>
+                    {% if order.payment_method == 'driver_payment' %}
+                      <span class="badge-soft">Водителю</span>
+                    {% else %}
+                      <span class="badge-soft-gray">{{ order.payment_method }}</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if order.payment_method == 'driver_payment' and order.status != 'canceled' %}
+                      {{ '%.2f'|format((order.total_revenue or 0) - (order.delivery_cost or 0)) }} ₽
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <div class="driver-inline-empty">У водителя пока нет заявок.</div>
+        {% endif %}
+
+        <div class="driver-section-title">Корректировка денег у водителя</div>
+        <form method="post" action="/drivers/{{ card.driver.id }}/cash" class="driver-balance-form" onsubmit="return false;">
+          <input type="hidden" name="amount">
+
+          <div class="driver-balance-row">
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              class="js-driver-amount"
+              placeholder="Сумма"
+            >
+            <input
+              type="text"
+              name="reason"
+              placeholder="Причина, необязательно"
+            >
+          </div>
+
+          <div class="driver-balance-actions">
+            <button type="button" class="btn btn-small" onclick="submitDriverCash(this.form, 1)">+ Добавить вручную</button>
+            <button type="button" class="btn btn-small btn-minus" onclick="submitDriverCash(this.form, -1)">− Забрали часть</button>
+            <button
+              type="button"
+              class="btn btn-small btn-accent"
+              onclick="takeAllDriverCash(this.form, '{{ '%.2f'|format(card.driver.cash_on_hand or 0) }}')"
+            >
+              Забрать все деньги
+            </button>
+          </div>
+        </form>
+      </article>
+    {% else %}
+      <div class="empty-state" style="grid-column: 1 / -1;">Водителей пока нет</div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Последние движения денег у водителей</h3>
+      <p class="panel-note">История ручных пополнений и изъятий.</p>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Дата</th>
+          <th>Водитель</th>
+          <th>Сумма</th>
+          <th>Причина</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in movements %}
+          <tr>
+            <td>{{ item.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+            <td>{{ item.driver.name }}</td>
+            <td>{{ '%.2f'|format(item.amount or 0) }} ₽</td>
+            <td>{{ item.reason or '—' }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="4">
+              <div class="empty-state">Движений пока нет</div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div id="driver-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div>
+        <h3>Добавить водителя</h3>
+        <p>Заполни данные водителя для дальнейшего учёта доставок и денег на руках.</p>
+      </div>
+      <button type="button" class="icon-btn" onclick="closeDriverModal()">×</button>
+    </div>
+
+    <form method="post" action="/drivers" class="modal-grid">
+      <div class="grid-two">
+        <div class="field">
+          <label>ФИО</label>
+          <input name="name" required>
+        </div>
+
+        <div class="field">
+          <label>Телефон</label>
+          <input name="phone">
+        </div>
+      </div>
+
+      <div class="grid-two">
+        <div class="field">
+          <label>Машина</label>
+          <input name="vehicle">
+        </div>
+
+        <div class="field">
+          <label>Комментарий</label>
+          <input name="notes">
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-light" onclick="closeDriverModal()">Отмена</button>
+        <button type="submit" class="btn">Сохранить водителя</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function openDriverModal() {
+    document.getElementById('driver-modal').classList.remove('hidden');
+  }
+
+  function closeDriverModal() {
+    document.getElementById('driver-modal').classList.add('hidden');
+  }
+
+  function submitDriverCash(form, direction) {
+    const visibleInput = form.querySelector('.js-driver-amount');
+    const hiddenAmount = form.querySelector('input[name="amount"]');
+
+    const raw = (visibleInput.value || '').replace(',', '.').trim();
+    if (!raw) {
+      alert('Укажи сумму.');
+      return;
+    }
+
+    const numeric = Math.abs(Number(raw));
+    if (Number.isNaN(numeric) || numeric <= 0) {
+      alert('Сумма указана некорректно.');
+      return;
+    }
+
+    hiddenAmount.value = direction < 0 ? `-${numeric}` : `${numeric}`;
+    form.submit();
+  }
+
+  function takeAllDriverCash(form, total) {
+    const hiddenAmount = form.querySelector('input[name="amount"]');
+    const normalized = String(total).replace(',', '.').trim();
+    const numeric = Number(normalized);
+
+    if (Number.isNaN(numeric) || numeric <= 0) {
+      alert('У водителя нет денег для изъятия.');
+      return;
+    }
+
+    hiddenAmount.value = `-${numeric}`;
+    form.submit();
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      closeDriverModal();
+    }
+  });
+
+  document.getElementById('driver-modal').addEventListener('click', function (e) {
+    if (e.target.id === 'driver-modal') {
+      closeDriverModal();
+    }
+  });
+</script>
+{% endblock %}

@@ -1,24 +1,21 @@
+from __future__ import annotations
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
-from app.api.routes.auth import router as auth_router
-from app.api.routes.clients import router as clients_router
-from app.api.routes.projects import router as projects_router
-from app.api.routes.stats import router as stats_router
-from app.api.routes.tasks import router as tasks_router
-from app.core.config import settings
-from app.core.db import Base, engine
-
-Base.metadata.create_all(bind=engine)
-
-app = FastAPI(title=settings.app_name)
-
-app.include_router(auth_router)
-app.include_router(clients_router)
-app.include_router(projects_router)
-app.include_router(tasks_router)
-app.include_router(stats_router)
+from app.db import build_session_factory, init_db
+from app.routers.web import router as web_router
 
 
-@app.get("/")
-def root():
-    return {"message": f"{settings.app_name} API is running"}
+def create_app(database_url: str | None = None) -> FastAPI:
+    app = FastAPI(title='BuildCRM Ready', version='1.0.0')
+    engine, SessionLocal = build_session_factory(database_url)
+    init_db(engine)
+    app.state.engine = engine
+    app.state.SessionLocal = SessionLocal
+    app.mount('/static', StaticFiles(directory='app/static'), name='static')
+    app.include_router(web_router)
+    return app
+
+
+app = create_app()
