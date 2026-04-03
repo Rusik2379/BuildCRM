@@ -153,7 +153,7 @@
     <button class="btn" type="button" onclick="openCreateModal()">+ Добавить номенклатуру</button>
   </div>
   <div class="right-note">
-    Цена продажи указывается при создании заявки
+    Цены закупа и продажи хранятся прямо в номенклатуре
   </div>
 </section>
 
@@ -201,12 +201,63 @@
 <section class="panel">
   <div class="panel-head">
     <div>
-      <h3>Вся номенклатура</h3>
-      <p class="panel-note">Можно редактировать или удалять позиции прямо из таблицы.</p>
+      <h3>Номенклатура по поставщикам и категориям</h3>
+      <p class="panel-note">Сначала показывается поставщик, внутри — категории и товары. Ниже остаётся полная таблица для редактирования.</p>
     </div>
   </div>
 
-  <div class="table-wrap">
+  
+  <div class="supplier-groups">
+    {% for supplier_group in grouped_products %}
+      <details class="kind-card" {% if loop.first %}open{% endif %}>
+        <summary class="kind-title">{{ supplier_group.supplier }}</summary>
+        <div class="table-wrap">
+          {% for category_group in supplier_group.categories %}
+            <div style="margin: 10px 0 16px;">
+              <div class="panel-note" style="margin-bottom:8px;"><strong>{{ category_group.name }}</strong></div>
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Название</th>
+                    <th>Ед.</th>
+                    <th>Закуп</th>
+                    <th>Розница</th>
+                    <th>Мелк. опт</th>
+                    <th>Крупн. опт</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for product in category_group.products %}
+                    <tr>
+                      <td><strong>{{ product.name }}</strong></td>
+                      <td>{{ product.unit }}</td>
+                      <td>{{ '%.2f'|format(product.purchase_price or 0) }} ₽</td>
+                      <td>{{ '%.2f'|format(product.retail_price or 0) }} ₽</td>
+                      <td>{{ '%.2f'|format(product.small_opt_price or 0) }} ₽</td>
+                      <td>{{ '%.2f'|format(product.large_opt_price or 0) }} ₽</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endfor %}
+        </div>
+      </details>
+    {% else %}
+      <div class="empty-state">Номенклатура пока не добавлена</div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Полный список для редактирования</h3>
+      <p class="panel-note">Быстрое редактирование, удаление и контроль цен по каждой позиции.</p>
+    </div>
+  </div>
+
+
     <table class="table">
       <thead>
         <tr>
@@ -215,6 +266,9 @@
           <th>Поставщик</th>
           <th>Единица</th>
           <th>Цена закупа</th>
+          <th>Розница</th>
+          <th>Мелк. опт</th>
+          <th>Крупн. опт</th>
           <th>Описание</th>
           <th>Дата</th>
           <th>Действия</th>
@@ -228,6 +282,9 @@
             <td>{{ product.supplier.name if product.supplier else '—' }}</td>
             <td>{{ product.unit }}</td>
             <td>{{ '%.2f'|format(product.purchase_price or 0) }} ₽</td>
+            <td>{{ '%.2f'|format(product.retail_price or 0) }} ₽</td>
+            <td>{{ '%.2f'|format(product.small_opt_price or 0) }} ₽</td>
+            <td>{{ '%.2f'|format(product.large_opt_price or 0) }} ₽</td>
             <td>{{ product.description or '—' }}</td>
             <td>{{ product.created_at.strftime('%d.%m.%Y') if product.created_at else '—' }}</td>
             <td>
@@ -241,6 +298,9 @@
                     '{{ (product.category or '')|e }}',
                     '{{ product.unit|e }}',
                     '{{ '%.2f'|format(product.purchase_price or 0) }}',
+                    '{{ '%.2f'|format(product.retail_price or 0) }}',
+                    '{{ '%.2f'|format(product.small_opt_price or 0) }}',
+                    '{{ '%.2f'|format(product.large_opt_price or 0) }}',
                     '{{ (product.description or '')|e }}',
                     '{{ product.supplier_id or '' }}'
                   )"
@@ -331,6 +391,21 @@
         <div class="field">
           <label>Цена закупа</label>
           <input name="purchase_price" type="number" step="0.01" min="0" value="0">
+        </div>
+        <div class="field">
+          <label>Розница</label>
+          <input name="retail_price" type="number" step="0.01" min="0" value="0">
+        </div>
+      </div>
+
+      <div class="grid-two">
+        <div class="field">
+          <label>Мелкий опт</label>
+          <input name="small_opt_price" type="number" step="0.01" min="0" value="0">
+        </div>
+        <div class="field">
+          <label>Крупный опт</label>
+          <input name="large_opt_price" type="number" step="0.01" min="0" value="0">
         </div>
 
         <div class="field">
@@ -437,7 +512,7 @@
     document.getElementById('create-product-modal').classList.add('hidden');
   }
 
-  function openEditModal(id, name, category, unit, purchasePrice, description, supplierId) {
+  function openEditModal(id, name, category, unit, purchasePrice, retailPrice, smallOptPrice, largeOptPrice, description, supplierId) {
     const modal = document.getElementById('edit-product-modal');
     const form = document.getElementById('edit-product-form');
 

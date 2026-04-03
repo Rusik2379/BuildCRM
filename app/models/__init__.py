@@ -157,6 +157,18 @@ class StockItem(Base):
     supplier: Mapped['Supplier | None'] = relationship(back_populates='stock_items')
 
 
+class GeneralExpense(Base):
+    __tablename__ = 'general_expenses'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    category: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=Decimal('0'))
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+
+
 class Order(Base):
     __tablename__ = 'orders'
 
@@ -172,7 +184,11 @@ class Order(Base):
     total_revenue: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
     total_purchase: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
     total_profit: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal('0'))
+    markup_percent: Mapped[Decimal] = mapped_column(Numeric(8, 2), default=Decimal('0'))
 
+    client_source_snapshot: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    document_issued: Mapped[bool] = mapped_column(Boolean, default=False)
+    document_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False

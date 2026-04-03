@@ -15,6 +15,7 @@ from app.models import (
     Client,
     Driver,
     DriverCashMovement,
+    GeneralExpense,
     Order,
     OrderItem,
     Product,
@@ -46,13 +47,21 @@ UNITS = ['шт', 'м3', 'т', 'кг', 'мешок', 'лист', 'паллета'
 
 ORDER_STATUSES = ['new', 'in_work', 'delivered', 'done', 'canceled']
 PAYMENT_METHODS = [
-    ('cash', 'Наличкой'),
-    ('card', 'По карте'),
-    ('driver_payment', 'Оплата водителю'),
-    ('supplier_balance', 'Балансом поставщика'),
+    ('cash_us', 'Наличка нам'),
+    ('transfer_us', 'Перевод нам'),
+    ('invoice_no_vat', 'Безнал без НДС'),
+    ('cash_driver', 'Наличка водителю'),
+    ('transfer_supplier', 'Перевод поставщику'),
 ]
 DELIVERY_TYPES = [('pickup', 'Самовывоз'), ('delivery', 'Доставка')]
-PRICING_TIERS = [('retail', 'Розница'), ('small_opt', 'Мелкий опт'), ('large_opt', 'Крупный опт')]
+PRICING_TIERS = [
+    ('retail', 'Розница'),
+    ('small_opt', 'Мелкий опт'),
+    ('large_opt', 'Крупный опт'),
+    ('small_opt_non_cash', 'Мелк. опт безнал (+6%)'),
+    ('medium_opt_non_cash', 'Ср. опт безнал (+2%)'),
+    ('large_opt_non_cash', 'Кр. опт безнал (-3%)'),
+]
 
 
 STATUS_LABELS = {
@@ -64,10 +73,15 @@ STATUS_LABELS = {
 }
 
 PAYMENT_LABELS = {
-    'cash': 'Наличными',
-    'card': 'По карте',
-    'driver_payment': 'Оплата водителю',
-    'supplier_balance': 'Балансом поставщика',
+    'cash': 'Наличка нам',
+    'cash_us': 'Наличка нам',
+    'card': 'Перевод нам',
+    'transfer': 'Перевод нам',
+    'transfer_us': 'Перевод нам',
+    'invoice_no_vat': 'Безнал без НДС',
+    'driver_payment': 'Наличка водителю',
+    'cash_driver': 'Наличка водителю',
+    'transfer_supplier': 'Перевод поставщику',
 }
 
 DELIVERY_LABELS = {
@@ -78,7 +92,8 @@ DELIVERY_LABELS = {
 OPERATION_KIND_LABELS = {
     'order': 'Заявки',
     'supplier': 'Поставщики',
-    'driver': 'Водители',
+    'driver': 'Доставка',
+    'expense': 'Общие расходы',
 }
 
 RUS_MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
@@ -103,8 +118,21 @@ def parse_date_bounds(date_from: str = '', date_to: str = '') -> tuple[datetime 
     return start_dt, end_dt
 
 
+def as_naive_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is not None:
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
+
+
+def as_date_string(value: datetime | None, fmt: str = '%d.%m.%Y %H:%M') -> str:
+    normalized = as_naive_utc(value)
+    return normalized.strftime(fmt) if normalized else '—'
+
+
 def build_monthly_rows(orders: list[Order], months_back: int = 6) -> list[dict]:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     months: list[dict] = []
 
     for offset in range(months_back - 1, -1, -1):
@@ -115,11 +143,11 @@ def build_monthly_rows(orders: list[Order], months_back: int = 6) -> list[dict]:
             month += 12
             year -= 1
 
-        start = datetime(year, month, 1, tzinfo=timezone.utc)
+        start = datetime(year, month, 1)
         if month == 12:
-            end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+            end = datetime(year + 1, 1, 1)
         else:
-            end = datetime(year, month + 1, 1, tzinfo=timezone.utc)
+            end = datetime(year, month + 1, 1)
 
         months.append({
             'label': f"{RUS_MONTHS[month - 1]} {year}",
@@ -133,7 +161,7 @@ def build_monthly_rows(orders: list[Order], months_back: int = 6) -> list[dict]:
     for month in months:
         month_orders = [
             order for order in orders
-            if order.created_at and month['start'] <= order.created_at < month['end']
+            if as_naive_utc(order.created_at) and month['start'] <= as_naive_utc(order.created_at) < month['end']
         ]
 
         revenue = sum((Decimal(order.total_revenue or 0) for order in month_orders), Decimal('0'))
@@ -175,12 +203,11 @@ def get_or_create_supplier(db: Session, existing_supplier_id: str = '', new_supp
     return None
 
 
-def to_stock_int_decimal(value: str | int | float | Decimal | None) -> Decimal:
+def to_stock_decimal(value: str | int | float | Decimal | None) -> Decimal:
     raw = to_decimal(value, '0')
-    as_int = int(raw)
-    if as_int < 0:
-        as_int = 0
-    return Decimal(as_int)
+    if raw < 0:
+        raw = Decimal('0')
+    return raw.quantize(Decimal('0.01'))
 
 
 @router.get('/')
@@ -205,6 +232,10 @@ def dashboard(request: Request, db: Session = Depends(db_dependency)):
     total_revenue = sum((Decimal(order.total_revenue or 0) for order in all_orders), Decimal('0'))
     total_purchase = sum((Decimal(order.total_purchase or 0) for order in all_orders), Decimal('0'))
     total_profit = sum((Decimal(order.total_profit or 0) for order in all_orders), Decimal('0'))
+    general_expenses_total = db.scalar(
+        select(func.coalesce(func.sum(GeneralExpense.amount), 0))
+    ) or 0
+    net_profit_total = total_profit - Decimal(general_expenses_total or 0)
 
     supplier_balance_total = db.scalar(
         select(func.coalesce(func.sum(Supplier.balance), 0))
@@ -225,6 +256,8 @@ def dashboard(request: Request, db: Session = Depends(db_dependency)):
             'total_revenue': total_revenue,
             'total_purchase': total_purchase,
             'total_profit': total_profit,
+            'general_expenses_total': Decimal(general_expenses_total or 0),
+            'net_profit_total': Decimal(net_profit_total or 0),
             'supplier_balance_total': Decimal(supplier_balance_total or 0),
             'driver_cash_total': Decimal(driver_cash_total or 0),
             'monthly_rows': monthly_rows,
@@ -474,6 +507,26 @@ def products_page(
 
     suppliers = db.scalars(select(Supplier).order_by(Supplier.name.asc())).all()
 
+    grouped_products: list[dict] = []
+    grouped_map: dict[str, dict] = {}
+    for product in products:
+        supplier_name = product.supplier.name if product.supplier else 'Без поставщика'
+        supplier_bucket = grouped_map.setdefault(supplier_name, {'supplier': supplier_name, 'categories': {}})
+        category_name = product.category or 'Без категории'
+        supplier_bucket['categories'].setdefault(category_name, []).append(product)
+
+    for supplier_name in sorted(grouped_map.keys()):
+        categories = grouped_map[supplier_name]['categories']
+        grouped_products.append(
+            {
+                'supplier': supplier_name,
+                'categories': [
+                    {'name': category_name, 'products': categories[category_name]}
+                    for category_name in sorted(categories.keys())
+                ],
+            }
+        )
+
     return templates.TemplateResponse(
         request,
         'products.html',
@@ -485,6 +538,7 @@ def products_page(
             'existing_categories': merged_categories,
             'units': UNITS,
             'suppliers': suppliers,
+            'grouped_products': grouped_products,
         },
     )
 
@@ -494,26 +548,30 @@ def create_product(
     name: str = Form(...),
     existing_category: str = Form(''),
     new_category: str = Form(''),
+    category: str = Form(''),
     existing_supplier_id: str = Form(''),
     new_supplier_name: str = Form(''),
+    supplier_id: str = Form(''),
     unit: str = Form('шт'),
     description: str = Form(''),
     purchase_price: str = Form('0'),
+    retail_price: str = Form('0'),
+    small_opt_price: str = Form('0'),
+    large_opt_price: str = Form('0'),
     db: Session = Depends(db_dependency),
 ):
-    final_category = new_category.strip() or existing_category.strip() or None
-    supplier = get_or_create_supplier(db, existing_supplier_id, new_supplier_name)
+    final_category = new_category.strip() or existing_category.strip() or category.strip() or None
+    supplier = get_or_create_supplier(db, existing_supplier_id or supplier_id, new_supplier_name)
 
     product = find_or_create_product(db, name, final_category or '', unit)
     product.category = final_category
     product.supplier_id = supplier.id if supplier else None
     product.description = description.strip() or None
     product.purchase_price = to_decimal(purchase_price)
-
-    product.retail_price = Decimal('0')
-    product.small_opt_price = Decimal('0')
-    product.large_opt_price = Decimal('0')
-    product.is_wholesale = False
+    product.retail_price = to_decimal(retail_price)
+    product.small_opt_price = to_decimal(small_opt_price)
+    product.large_opt_price = to_decimal(large_opt_price)
+    product.is_wholesale = bool(product.small_opt_price or product.large_opt_price)
 
     db.commit()
     return RedirectResponse('/products', status_code=HTTP_303_SEE_OTHER)
@@ -525,11 +583,16 @@ def edit_product(
     name: str = Form(...),
     existing_category: str = Form(''),
     new_category: str = Form(''),
+    category: str = Form(''),
     existing_supplier_id: str = Form(''),
     new_supplier_name: str = Form(''),
+    supplier_id: str = Form(''),
     unit: str = Form('шт'),
     description: str = Form(''),
     purchase_price: str = Form('0'),
+    retail_price: str = Form('0'),
+    small_opt_price: str = Form('0'),
+    large_opt_price: str = Form('0'),
     db: Session = Depends(db_dependency),
 ):
     product = db.get(Product, product_id)
@@ -544,8 +607,8 @@ def edit_product(
     if duplicate:
         raise HTTPException(status_code=400, detail='Позиция с таким названием уже существует')
 
-    final_category = new_category.strip() or existing_category.strip() or None
-    supplier = get_or_create_supplier(db, existing_supplier_id, new_supplier_name)
+    final_category = new_category.strip() or existing_category.strip() or category.strip() or None
+    supplier = get_or_create_supplier(db, existing_supplier_id or supplier_id, new_supplier_name)
 
     product.name = name.strip()
     product.category = final_category
@@ -553,6 +616,10 @@ def edit_product(
     product.unit = unit.strip() or 'шт'
     product.description = description.strip() or None
     product.purchase_price = to_decimal(purchase_price)
+    product.retail_price = to_decimal(retail_price)
+    product.small_opt_price = to_decimal(small_opt_price)
+    product.large_opt_price = to_decimal(large_opt_price)
+    product.is_wholesale = bool(product.small_opt_price or product.large_opt_price)
 
     db.commit()
     return RedirectResponse('/products', status_code=HTTP_303_SEE_OTHER)
@@ -676,11 +743,24 @@ def create_warehouse(
 @router.post('/stock')
 def create_stock_item(
     product_id: int = Form(...),
-    warehouse_id: int = Form(...),
+    warehouse_id: int | None = Form(None),
+    warehouse_name: str = Form(''),
+    city: str = Form(''),
     quantity: str = Form('0'),
     notes: str = Form(''),
     db: Session = Depends(db_dependency),
 ):
+    if warehouse_id is None and warehouse_name.strip():
+        warehouse = db.scalar(select(Warehouse).where(Warehouse.name == warehouse_name.strip()).limit(1))
+        if not warehouse:
+            warehouse = Warehouse(name=warehouse_name.strip(), location=city.strip() or None)
+            db.add(warehouse)
+            db.flush()
+        warehouse_id = warehouse.id
+
+    if warehouse_id is None:
+        raise HTTPException(status_code=400, detail='Нужно выбрать склад')
+
     existing = db.scalar(
         select(StockItem).where(
             StockItem.product_id == product_id,
@@ -688,7 +768,7 @@ def create_stock_item(
         ).limit(1)
     )
 
-    qty = to_stock_int_decimal(quantity)
+    qty = to_stock_decimal(quantity)
 
     if existing:
         existing.quantity = qty
@@ -697,6 +777,21 @@ def create_stock_item(
         existing.updated_at = datetime.now(timezone.utc)
         db.commit()
         return RedirectResponse('/stock', status_code=HTTP_303_SEE_OTHER)
+
+    product = db.get(Product, product_id)
+    supplier_id = product.supplier_id if product else None
+
+    item = StockItem(
+        product_id=product_id,
+        warehouse_id=warehouse_id,
+        supplier_id=supplier_id,
+        quantity=qty,
+        notes=notes.strip() or None,
+        updated_at=datetime.now(timezone.utc),
+    )
+    db.add(item)
+    db.commit()
+    return RedirectResponse('/stock', status_code=HTTP_303_SEE_OTHER)
 
     product = db.get(Product, product_id)
     supplier_id = product.supplier_id if product else None
@@ -724,7 +819,7 @@ def set_stock_item_quantity(
     if not item:
         raise HTTPException(status_code=404, detail='Складская позиция не найдена')
 
-    item.quantity = to_stock_int_decimal(quantity)
+    item.quantity = to_stock_decimal(quantity)
     item.updated_at = datetime.now(timezone.utc)
     db.commit()
 
@@ -811,7 +906,7 @@ def drivers_page(request: Request, db: Session = Depends(db_dependency)):
         driver_orders = [order for order in all_driver_orders if order.driver_id == driver.id]
         driver_payment_orders = [
             order for order in driver_orders
-            if order.payment_method == 'driver_payment' and order.status != 'canceled'
+            if order.payment_method in {'driver_payment', 'cash_driver'} and order.status != 'canceled'
         ]
 
         collected_total = sum(
@@ -969,6 +1064,7 @@ def orders_page(
             'products': products,
             'clients': clients,
             'client_categories': CLIENT_CATEGORIES,
+            'client_sources': CLIENT_SOURCES,
             'drivers': drivers,
             'suppliers': suppliers,
             'status_labels': STATUS_LABELS,
@@ -983,23 +1079,45 @@ def create_order_route(
     client_name: str = Form(...),
     client_phone: str = Form(''),
     client_address: str = Form(''),
+    client_source: str = Form(''),
     client_category: str = Form(''),
-    product_ids: list[str] = Form(...),
-    quantities: list[str] = Form(...),
-    sale_prices: list[str] = Form(...),
+    product_ids: list[str] | None = Form(None),
+    quantities: list[str] | None = Form(None),
+    sale_prices: list[str] | None = Form(None),
+    product_name: str = Form(''),
+    product_category: str = Form(''),
+    product_unit: str = Form('шт'),
+    quantity: str = Form('1'),
     pricing_tier: str = Form('retail'),
     status: str = Form('new'),
-    payment_method: str = Form('cash'),
+    payment_method: str = Form('cash_us'),
     delivery_type: str = Form('pickup'),
     delivery_cost: str = Form('0'),
     additional_costs: str = Form('0'),
     supplier_id: str = Form(''),
     driver_id: str = Form(''),
     use_supplier_balance: str | None = Form(None),
+    document_issued: str | None = Form(None),
+    document_name: str = Form(''),
     notes: str = Form(''),
     db: Session = Depends(db_dependency),
 ):
+    if not product_ids:
+        product_ids = []
+    if not quantities:
+        quantities = []
+    if not sale_prices:
+        sale_prices = []
+
     valid_product_ids = [item for item in product_ids if str(item).strip()]
+
+    if not valid_product_ids and product_name.strip():
+        product = find_or_create_product(db, product_name, product_category, product_unit)
+        product_ids = [str(product.id)]
+        quantities = [quantity or '1']
+        sale_prices = ['']
+        valid_product_ids = product_ids
+
     if not valid_product_ids:
         raise HTTPException(status_code=400, detail='Добавь хотя бы один товар в заявку')
 
@@ -1010,6 +1128,7 @@ def create_order_route(
             client_name=client_name,
             client_phone=client_phone,
             client_address=client_address,
+            client_source=client_source,
             client_category=client_category,
             product_ids=product_ids,
             quantities=quantities,
@@ -1024,11 +1143,33 @@ def create_order_route(
             supplier_id=supplier_id,
             driver_id=driver_id,
             use_supplier_balance=use_supplier_balance is not None,
+            document_issued=document_issued is not None,
+            document_name=document_name,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return RedirectResponse(f'/orders/{kind}', status_code=HTTP_303_SEE_OTHER)
+
+
+@router.post('/orders/{order_id}/status')
+def update_order_status(
+    order_id: int,
+    kind: str = Form(...),
+    status: str = Form(...),
+    db: Session = Depends(db_dependency),
+):
+    order = db.get(Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail='Заявка не найдена')
+
+    if status not in ORDER_STATUSES:
+        raise HTTPException(status_code=400, detail='Некорректный статус')
+
+    order.status = status
+    db.commit()
+    return RedirectResponse(f'/orders/{kind}', status_code=HTTP_303_SEE_OTHER)
+
 
 @router.get('/finances')
 def finances_page(
@@ -1099,6 +1240,12 @@ def finances_page(
 
     supplier_movements = db.scalars(supplier_movements_query.limit(200)).all()
     driver_movements = db.scalars(driver_movements_query.limit(200)).all()
+    expenses_query = select(GeneralExpense).order_by(GeneralExpense.created_at.desc(), GeneralExpense.id.desc())
+    if start_dt:
+        expenses_query = expenses_query.where(GeneralExpense.created_at >= start_dt)
+    if end_dt:
+        expenses_query = expenses_query.where(GeneralExpense.created_at < end_dt)
+    general_expenses = db.scalars(expenses_query.limit(200)).all()
 
     period_revenue_total = sum((Decimal(item.total_revenue or 0) for item in orders_for_operations), Decimal('0'))
     period_purchase_total = sum((Decimal(item.total_purchase or 0) for item in orders_for_operations), Decimal('0'))
@@ -1121,6 +1268,8 @@ def finances_page(
         (abs(Decimal(item.amount or 0)) for item in driver_movements if Decimal(item.amount or 0) < 0),
         Decimal('0'),
     )
+    general_expense_total = sum((Decimal(item.amount or 0) for item in general_expenses), Decimal('0'))
+    period_net_profit_total = period_profit_total - general_expense_total
 
     operations: list[dict] = []
 
@@ -1155,7 +1304,7 @@ def finances_page(
             {
                 'created_at': item.created_at,
                 'kind': 'driver',
-                'type': 'Деньги водителя',
+                'type': 'Доставка',
                 'entity': item.driver.name if item.driver else '—',
                 'amount': Decimal(item.amount or 0),
                 'direction': 'in' if Decimal(item.amount or 0) >= 0 else 'out',
@@ -1163,11 +1312,24 @@ def finances_page(
             }
         )
 
+    for item in general_expenses:
+        operations.append(
+            {
+                'created_at': item.created_at,
+                'kind': 'expense',
+                'type': 'Общий расход',
+                'entity': item.category,
+                'amount': Decimal(item.amount or 0),
+                'direction': 'out',
+                'note': item.note or 'Офисные и операционные расходы',
+            }
+        )
+
     if operation_kind:
         operations = [item for item in operations if item['kind'] == operation_kind]
 
     operations.sort(
-        key=lambda x: x['created_at'] or datetime.min.replace(tzinfo=timezone.utc),
+        key=lambda x: as_naive_utc(x['created_at']) or datetime.min,
         reverse=True,
     )
     operations = operations[:80]
@@ -1192,6 +1354,9 @@ def finances_page(
             'period_revenue_total': period_revenue_total,
             'period_purchase_total': period_purchase_total,
             'period_profit_total': period_profit_total,
+            'general_expense_total': general_expense_total,
+            'period_net_profit_total': period_net_profit_total,
+            'general_expenses': general_expenses,
             'monthly_rows': monthly_rows,
             'date_from': date_from,
             'date_to': date_to,
@@ -1199,6 +1364,23 @@ def finances_page(
             'operation_kind_labels': OPERATION_KIND_LABELS,
         },
     )
+
+
+@router.post('/finances/expenses')
+def create_general_expense(
+    category: str = Form(...),
+    amount: str = Form(...),
+    note: str = Form(''),
+    db: Session = Depends(db_dependency),
+):
+    expense = GeneralExpense(
+        category=category.strip(),
+        amount=to_decimal(amount),
+        note=note.strip() or None,
+    )
+    db.add(expense)
+    db.commit()
+    return RedirectResponse('/finances', status_code=HTTP_303_SEE_OTHER)
 
 
 @router.get('/documents')

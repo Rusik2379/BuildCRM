@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
 
-{% block title %}{{ 'Заявки розница' if kind == 'retail' else 'Заявки опт' }}{% endblock %}
-{% block page_title %}{{ 'Заявки розница' if kind == 'retail' else 'Заявки опт' }}{% endblock %}
-{% block page_subtitle %}Карточки заявок, фильтрация и создание через модальное окно{% endblock %}
+{% block title %}{{ 'Розничные заявки' if kind == 'retail' else 'Оптовые заявки' }}{% endblock %}
+{% block page_title %}{{ 'Розничные заявки' if kind == 'retail' else 'Оптовые заявки' }}{% endblock %}
+{% block page_subtitle %}Компактный список заявок, быстрые статусы и проценты заработка по каждой сделке{% endblock %}
 
 {% block content %}
 <style>
@@ -17,113 +17,228 @@
 
   .order-filter-form {
     display: grid;
-    grid-template-columns: minmax(220px, 1.4fr) minmax(180px, 1fr) minmax(180px, 1fr) 170px 170px auto;
+    grid-template-columns: minmax(220px, 1.5fr) repeat(4, minmax(150px, 1fr)) auto;
     gap: 10px;
     align-items: end;
     width: 100%;
   }
 
-  .order-grid {
+  .orders-list {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 18px;
+    gap: 16px;
   }
 
-  .order-card {
+  .order-accordion {
+    position: relative;
+    border: 1px solid #dbe3ef;
+    border-radius: 22px;
     background: #fff;
-    border: 1px solid var(--line);
-    border-radius: 24px;
-    box-shadow: var(--shadow);
-    padding: 20px;
+    overflow: hidden;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.07);
   }
 
-  .order-head {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    align-items: start;
-    margin-bottom: 12px;
+  .order-accordion::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 5px;
+    background: #94a3b8;
   }
 
-  .order-title {
-    margin: 0;
-    font-size: 20px;
-    line-height: 1.15;
-  }
+  .order-accordion.status-new::before { background: #2563eb; }
+  .order-accordion.status-in_work::before { background: #ea580c; }
+  .order-accordion.status-delivered::before { background: #0f766e; }
+  .order-accordion.status-done::before { background: #15803d; }
+  .order-accordion.status-canceled::before { background: #dc2626; }
 
-  .order-meta {
-    color: var(--muted);
-    font-size: 13px;
-    margin-top: 6px;
-  }
-
-  .order-status {
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: #eff6ff;
-    color: #1d4ed8;
-    font-size: 12px;
-    font-weight: 800;
-    white-space: nowrap;
-  }
-
-  .order-info {
+  .order-summary {
+    list-style: none;
     display: grid;
-    gap: 10px;
-    margin-bottom: 14px;
+    grid-template-columns: 86px minmax(220px, 1.1fr) minmax(280px, 1.45fr) minmax(220px, 1.1fr) 132px;
+    gap: 16px;
+    align-items: center;
+    padding: 16px 18px 16px 22px;
+    cursor: pointer;
+    user-select: none;
   }
 
-  .order-info-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 12px 14px;
-    border: 1px solid var(--line);
-    border-radius: 14px;
+  .order-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .order-summary:hover {
     background: #f8fafc;
   }
 
-  .order-info-row span {
+  .order-accordion[open] {
+    box-shadow: 0 18px 34px rgba(15, 23, 42, 0.10);
+    border-color: #cbd5e1;
+  }
+
+  .order-accordion[open] .order-summary {
+    background: linear-gradient(180deg, #f8fbff 0%, #f8fafc 100%);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .order-summary-col {
+    min-width: 0;
+    display: grid;
+    gap: 5px;
+  }
+
+  .order-summary-main-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .order-summary-id {
+    font-size: 15px;
+    font-weight: 800;
+    color: #0f172a;
+  }
+
+  .order-summary-main {
+    font-size: 15px;
+    font-weight: 800;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .order-summary-meta {
     color: var(--muted);
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .order-info-row strong {
-    text-align: right;
+  .order-summary-address {
+    font-size: 13px;
+    color: #334155;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .order-items-title {
-    margin: 16px 0 8px;
-    font-size: 14px;
+  .order-summary-finance {
+    font-size: 18px;
+    color: #0f172a;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+
+  .order-summary-divider {
+    width: 100%;
+    height: 1px;
+    background: #edf2f7;
+    margin: 2px 0;
+  }
+
+  .order-toggle {
+    justify-self: end;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid #dbe3ef;
+    background: #f8fafc;
+    color: #0f172a;
+    font-size: 12px;
     font-weight: 800;
   }
 
-  .order-items-list {
+  .order-toggle-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    display: inline-grid;
+    place-items: center;
+    background: #e2e8f0;
+    color: #0f172a;
+    font-size: 15px;
+    line-height: 1;
+    transition: transform 0.2s ease, background 0.2s ease;
+  }
+
+  .order-toggle-text-close {
+    display: none;
+  }
+
+  .order-accordion[open] .order-toggle {
+    background: #eef2ff;
+    border-color: #c7d2fe;
+    color: #3730a3;
+  }
+
+  .order-accordion[open] .order-toggle-icon {
+    transform: rotate(45deg);
+    background: #c7d2fe;
+    color: #3730a3;
+  }
+
+  .order-accordion[open] .order-toggle-text-open {
+    display: none;
+  }
+
+  .order-accordion[open] .order-toggle-text-close {
+    display: inline;
+  }
+
+  .order-detail {
+    padding: 16px 18px 18px;
+  }
+
+  .order-detail-grid {
     display: grid;
-    gap: 8px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
   }
 
-  .order-item {
-    border: 1px solid #eef2f7;
-    border-radius: 14px;
-    padding: 12px;
-    background: #fff;
-  }
-
-  .order-item-name {
+  .order-main-title {
+    font-size: 16px;
     font-weight: 800;
     margin-bottom: 6px;
   }
 
-  .order-item-meta {
+  .order-subtext,
+  .order-meta-line {
     color: var(--muted);
     font-size: 13px;
+    line-height: 1.4;
   }
 
-  .order-card-footer {
-    margin-top: 16px;
-    color: var(--muted);
-    font-size: 13px;
+  .order-block {
+    display: grid;
+    gap: 6px;
   }
+
+  .order-block strong {
+    color: #0f172a;
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+    width: fit-content;
+  }
+
+  .status-new { background: #eff6ff; color: #1d4ed8; }
+  .status-in_work { background: #fff7ed; color: #c2410c; }
+  .status-delivered { background: #ecfeff; color: #0f766e; }
+  .status-done { background: #ecfdf5; color: #15803d; }
+  .status-canceled { background: #fef2f2; color: #b91c1c; }
 
   .badge-soft {
     display: inline-flex;
@@ -135,18 +250,72 @@
     font-weight: 800;
     background: #e0f2fe;
     color: #075985;
+    width: fit-content;
   }
 
-  .badge-soft-gray {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 6px 10px;
+  .order-summary-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .order-item-chip {
+    max-width: 100%;
+    padding: 5px 9px;
     border-radius: 999px;
-    font-size: 12px;
-    font-weight: 800;
     background: #f1f5f9;
-    color: #475569;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .order-item-chip.more {
+    background: #ede9fe;
+    color: #5b21b6;
+  }
+
+  .items-mini-list {
+    display: grid;
+    gap: 6px;
+  }
+
+  .items-mini-row {
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: #f8fafc;
+    font-size: 13px;
+  }
+
+  .status-update-form {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 8px;
+  }
+
+  .status-update-form select {
+    min-width: 150px;
+    padding: 9px 10px;
+  }
+
+  .btn-small {
+    padding: 9px 12px;
+    font-size: 13px;
+    border-radius: 12px;
+  }
+
+  .profit-positive {
+    color: #15803d;
+    font-weight: 800;
+  }
+
+  .profit-negative {
+    color: #b91c1c;
+    font-weight: 800;
   }
 
   .modal {
@@ -159,9 +328,7 @@
     z-index: 1200;
   }
 
-  .modal.hidden {
-    display: none;
-  }
+  .modal.hidden { display: none; }
 
   .modal-card {
     width: min(1120px, 100%);
@@ -182,15 +349,8 @@
     margin-bottom: 18px;
   }
 
-  .modal-header h3 {
-    margin: 0 0 6px;
-    font-size: 24px;
-  }
-
-  .modal-header p {
-    margin: 0;
-    color: var(--muted);
-  }
+  .modal-header h3 { margin: 0 0 6px; font-size: 24px; }
+  .modal-header p { margin: 0; color: var(--muted); }
 
   .icon-btn {
     width: 42px;
@@ -202,33 +362,9 @@
     font-size: 22px;
   }
 
-  .form-grid {
-    display: grid;
-    gap: 16px;
-  }
-
-  .grid-two {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-  }
-
-  .grid-three {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
-  }
-
-  .field {
-    display: grid;
-    gap: 8px;
-  }
-
-  .field label {
-    font-size: 14px;
-    font-weight: 700;
-    color: #334155;
-  }
+  .form-grid { display: grid; gap: 16px; }
+  .grid-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .grid-three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 
   .items-box {
     border: 1px solid var(--line);
@@ -245,10 +381,7 @@
     margin-bottom: 12px;
   }
 
-  .items-list {
-    display: grid;
-    gap: 12px;
-  }
+  .items-list { display: grid; gap: 12px; }
 
   .item-row {
     display: grid;
@@ -261,43 +394,42 @@
     border: 1px solid #e5e7eb;
   }
 
-  .item-row-meta {
-    color: var(--muted);
-    font-size: 12px;
-    margin-top: 4px;
+  .item-row-meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .remove-row-btn { height: 46px; }
+
+  @media (max-width: 1400px) {
+    .order-summary {
+      grid-template-columns: 86px minmax(200px, 1fr) minmax(250px, 1.15fr) minmax(200px, 1fr) 122px;
+    }
   }
 
-  .remove-row-btn {
-    height: 46px;
-  }
-
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-  }
-
-  @media (max-width: 1200px) {
-    .order-grid {
-      grid-template-columns: 1fr 1fr;
+  @media (max-width: 1180px) {
+    .order-summary {
+      grid-template-columns: 86px minmax(220px, 1fr) minmax(250px, 1fr) minmax(190px, 0.95fr) 122px;
     }
 
-    .order-filter-form {
-      grid-template-columns: 1fr 1fr 1fr;
-    }
-
-    .item-row {
-      grid-template-columns: 1fr 1fr;
+    .order-detail-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
 
   @media (max-width: 900px) {
-    .order-grid,
     .grid-two,
     .grid-three,
     .order-filter-form,
-    .item-row {
+    .item-row,
+    .order-detail-grid {
       grid-template-columns: 1fr;
+    }
+
+    .order-summary {
+      grid-template-columns: 1fr;
+      gap: 12px;
+      padding-right: 18px;
+    }
+
+    .order-toggle {
+      justify-self: start;
     }
   }
 </style>
@@ -316,9 +448,7 @@
       <select name="status">
         <option value="">Все статусы</option>
         {% for item in order_statuses %}
-          <option value="{{ item }}" {% if status == item %}selected{% endif %}>
-            {{ status_labels[item] if item in status_labels else item }}
-          </option>
+          <option value="{{ item }}" {% if status == item %}selected{% endif %}>{{ status_labels[item] if item in status_labels else item }}</option>
         {% endfor %}
       </select>
     </div>
@@ -343,7 +473,7 @@
       <input type="date" name="date_to" value="{{ date_to }}">
     </div>
 
-    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    <div class="filter-actions">
       <button class="btn btn-light" type="submit">Фильтр</button>
       <a class="btn btn-light" href="/orders/{{ kind }}">Сбросить</a>
     </div>
@@ -354,56 +484,126 @@
   <div class="panel-head">
     <div>
       <h3>Список заявок</h3>
-      <p class="panel-note">Категория клиента сохранена, источник из заявки убран.</p>
+      <p class="panel-note">Заявки отображаются компактным списком: видно клиента, оплату, процент заработка и статус.</p>
     </div>
   </div>
 
-  <div class="order-grid">
+  <div class="orders-list">
     {% for order in orders %}
-      <article class="order-card">
-        <div class="order-head">
-          <div>
-            <h3 class="order-title">#{{ order.id }} — {{ order.client.name }}</h3>
-            <div class="order-meta">
-              {{ order.created_at.strftime('%d.%m.%Y %H:%M') if order.created_at else '—' }}
+      {% set markup_pct = order.markup_percent or 0 %}
+      {% set items_count = order.items|length %}
+      {% set ns = namespace(names=[]) %}
+      {% for item in order.items[:2] %}
+        {% set _ = ns.names.append(item.product.name ~ ' ×' ~ item.quantity) %}
+      {% endfor %}
+      <details class="order-accordion status-{{ order.status }}">
+        <summary class="order-summary">
+          <div class="order-summary-col">
+            <div class="order-summary-id">#{{ order.id }}</div>
+            <div class="order-summary-meta">{{ order.created_at.strftime('%d.%m.%Y %H:%M') if order.created_at else '—' }}</div>
+          </div>
+
+          <div class="order-summary-col">
+            <div class="order-summary-main-row">
+              <div class="order-summary-main">{{ order.client.name }}</div>
+              <div class="status-pill status-{{ order.status }}">{{ status_labels[order.status] if order.status in status_labels else order.status }}</div>
+            </div>
+            <div class="order-summary-meta">{{ order.client.phone or 'Без телефона' }}</div>
+            <div class="order-summary-address">{{ order.client.address or 'Адрес не указан' }}</div>
+          </div>
+
+          <div class="order-summary-col">
+            <div class="order-summary-main">Номенклатура</div>
+            <div class="order-summary-items">
+              {% for name in ns.names %}
+                <span class="order-item-chip">{{ name }}</span>
+              {% endfor %}
+              {% if items_count > 2 %}
+                <span class="order-item-chip more">+ ещё {{ items_count - 2 }}</span>
+              {% elif items_count == 0 %}
+                <span class="order-item-chip">Без товаров</span>
+              {% endif %}
+            </div>
+            <div class="order-summary-meta">{{ delivery_labels[order.delivery_type] if order.delivery_type in delivery_labels else order.delivery_type }} · {{ payment_labels[order.payment_method] if order.payment_method in payment_labels else order.payment_method }}</div>
+          </div>
+
+          <div class="order-summary-col">
+            <div class="order-summary-finance">{{ '%.2f'|format(order.total_revenue or 0) }} ₽</div>
+            <div class="order-summary-meta">Прибыль: <span class="{% if order.total_profit >= 0 %}profit-positive{% else %}profit-negative{% endif %}">{{ '%.2f'|format(order.total_profit or 0) }} ₽</span></div>
+            <div class="order-summary-meta">Наценка: {{ '%.2f'|format(markup_pct) }}% · Источник: {{ order.client_source_snapshot or order.client.source or '—' }}</div>
+          </div>
+
+          <div class="order-toggle" aria-hidden="true">
+            <span class="order-toggle-text-open">Подробнее</span>
+            <span class="order-toggle-text-close">Скрыть</span>
+            <span class="order-toggle-icon">+</span>
+          </div>
+        </summary>
+
+        <div class="order-detail">
+          <div class="order-detail-grid">
+            <div class="order-block">
+              <div class="order-main-title">Клиент</div>
+              <div class="order-meta-line">Категория: <strong>{{ order.client.category or '—' }}</strong></div>
+              <div class="order-meta-line">Источник: <strong>{{ order.client_source_snapshot or order.client.source or '—' }}</strong></div>
+              <div class="order-meta-line">Телефон: <strong>{{ order.client.phone or '—' }}</strong></div>
+              <div class="order-meta-line">Адрес: <strong>{{ order.client.address or '—' }}</strong></div>
+              <div class="order-meta-line">Комментарий: <strong>{{ order.notes or '—' }}</strong></div>
+            </div>
+
+            <div class="order-block">
+              <div class="order-main-title">Логистика и оплата</div>
+              <div class="order-meta-line">Оплата: <strong>{{ payment_labels[order.payment_method] if order.payment_method in payment_labels else order.payment_method }}</strong></div>
+              <div class="order-meta-line">Выдача: <strong>{{ delivery_labels[order.delivery_type] if order.delivery_type in delivery_labels else order.delivery_type }}</strong></div>
+              <div class="order-meta-line">Поставщик: <strong>{{ order.supplier.name if order.supplier else '—' }}</strong></div>
+              <div class="order-meta-line">Водитель: <strong>{{ order.driver.name if order.driver else '—' }}</strong></div>
+              <div class="order-meta-line">Списать с баланса: <strong>{% if order.use_supplier_balance %}Да{% else %}Нет{% endif %}</strong></div>
+            </div>
+
+            <div class="order-block">
+              <div class="order-main-title">Финансы</div>
+              <div class="order-meta-line">Оборот: <strong>{{ '%.2f'|format(order.total_revenue or 0) }} ₽</strong></div>
+              <div class="order-meta-line">Закуп и материалы: <strong>{{ '%.2f'|format(order.total_purchase or 0) }} ₽</strong></div>
+              <div class="order-meta-line">Доставка: <strong>{{ '%.2f'|format(order.delivery_cost or 0) }} ₽</strong></div>
+              <div class="order-meta-line">Доп. затраты: <strong>{{ '%.2f'|format(order.additional_costs or 0) }} ₽</strong></div>
+              <div class="order-meta-line">Чистая прибыль: <strong class="{% if order.total_profit >= 0 %}profit-positive{% else %}profit-negative{% endif %}">{{ '%.2f'|format(order.total_profit or 0) }} ₽</strong></div>
+              <div class="order-meta-line">Наценка: <strong>{{ '%.2f'|format(markup_pct) }}%</strong></div>
+              <div class="order-meta-line">Документ: <strong>{% if order.document_issued %}Да{% if order.document_name %} · {{ order.document_name }}{% endif %}{% else %}Нет{% endif %}</strong></div>
+            </div>
+
+            <div class="order-block">
+              <div class="order-main-title">Статус заявки</div>
+              <div class="order-meta-line">Текущий статус: <strong>{{ status_labels[order.status] if order.status in status_labels else order.status }}</strong></div>
+              <form method="post" action="/orders/{{ order.id }}/status" class="status-update-form">
+                <input type="hidden" name="kind" value="{{ kind }}">
+                <select name="status">
+                  {% for item in order_statuses %}
+                    <option value="{{ item }}" {% if order.status == item %}selected{% endif %}>{{ status_labels[item] if item in status_labels else item }}</option>
+                  {% endfor %}
+                </select>
+                <button class="btn btn-light btn-small" type="submit">Сохранить</button>
+              </form>
             </div>
           </div>
-          <div class="order-status">{{ status_labels[order.status] if order.status in status_labels else order.status }}</div>
-        </div>
 
-        <div class="order-info">
-          <div class="order-info-row"><span>Категория клиента</span><strong>{{ order.client.category or '—' }}</strong></div>
-          <div class="order-info-row"><span>Телефон</span><strong>{{ order.client.phone or '—' }}</strong></div>
-          <div class="order-info-row"><span>Адрес</span><strong>{{ order.client.address or '—' }}</strong></div>
-          <div class="order-info-row"><span>Оплата</span><strong>{{ payment_labels[order.payment_method] if order.payment_method in payment_labels else order.payment_method }}</strong></div>
-          <div class="order-info-row"><span>Выдача</span><strong>{{ delivery_labels[order.delivery_type] if order.delivery_type in delivery_labels else order.delivery_type }}</strong></div>
-          <div class="order-info-row"><span>Поставщик</span><strong>{{ order.supplier.name if order.supplier else '—' }}</strong></div>
-          <div class="order-info-row"><span>Водитель</span><strong>{{ order.driver.name if order.driver else '—' }}</strong></div>
-          <div class="order-info-row"><span>Выручка</span><strong>{{ '%.2f'|format(order.total_revenue or 0) }} ₽</strong></div>
-          <div class="order-info-row"><span>Прибыль</span><strong>{{ '%.2f'|format(order.total_profit or 0) }} ₽</strong></div>
-        </div>
-
-        <div class="order-items-title">Товары в заявке</div>
-        <div class="order-items-list">
-          {% for item in order.items %}
-            <div class="order-item">
-              <div class="order-item-name">{{ item.product.name }}</div>
-              <div class="order-item-meta">
-                Кол-во: {{ item.quantity }} • Продажа: {{ '%.2f'|format(item.sale_price or 0) }} ₽ • Закуп: {{ '%.2f'|format(item.purchase_price or 0) }} ₽
-              </div>
+          <div class="order-block" style="margin-top: 14px;">
+            <div class="order-main-title">Товары</div>
+            <div class="items-mini-list">
+              {% for item in order.items %}
+                {% set item_margin_pct = (((item.sale_price or 0) - (item.purchase_price or 0)) / (item.sale_price or 1) * 100) if item.sale_price else 0 %}
+                <div class="items-mini-row">
+                  <strong>{{ item.product.name }}</strong><br>
+                  {{ item.quantity }} × {{ '%.2f'|format(item.sale_price or 0) }} ₽ · закуп {{ '%.2f'|format(item.purchase_price or 0) }} ₽ · наценка {{ '%.2f'|format(item_margin_pct) }}%
+                </div>
+              {% else %}
+                <div class="items-mini-row">Товаров нет</div>
+              {% endfor %}
             </div>
-          {% else %}
-            <div class="order-item">Товаров нет</div>
-          {% endfor %}
+          </div>
         </div>
-
-        <div class="order-card-footer">
-          Доставка: {{ '%.2f'|format(order.delivery_cost or 0) }} ₽ • Доп. затраты: {{ '%.2f'|format(order.additional_costs or 0) }} ₽
-          {% if order.notes %}<br>Комментарий: {{ order.notes }}{% endif %}
-        </div>
-      </article>
+      </details>
     {% else %}
-      <div class="empty-state" style="grid-column: 1 / -1;">Заявок пока нет</div>
+      <div class="empty-state">Заявок пока нет</div>
     {% endfor %}
   </div>
 </section>
@@ -436,12 +636,22 @@
         </div>
       </div>
 
-      <div class="grid-two">
+      <div class="grid-three">
         <div class="field">
           <label>Категория клиента</label>
           <select name="client_category" id="client_category_input">
             <option value="">Не выбрана</option>
             {% for item in client_categories %}
+              <option value="{{ item }}">{{ item }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Источник клиента</label>
+          <select name="client_source" id="client_source_input">
+            <option value="">Не выбран</option>
+            {% for item in client_sources %}
               <option value="{{ item }}">{{ item }}</option>
             {% endfor %}
           </select>
@@ -457,7 +667,7 @@
         <div class="items-head">
           <div>
             <strong>Товары в заявке</strong>
-            <div class="order-meta">Пиши название товара — появятся подходящие варианты из номенклатуры</div>
+            <div class="order-meta">Пиши название товара — появятся подходящие варианты из номенклатуры.</div>
           </div>
           <button class="btn btn-light" type="button" onclick="addOrderItemRow()">+ Добавить товар</button>
         </div>
@@ -527,7 +737,7 @@
         </div>
 
         <div class="field">
-          <label>Водитель</label>
+          <label>Водитель / логистика</label>
           <select name="driver_id">
             <option value="">Не выбран</option>
             {% for item in drivers %}
@@ -542,6 +752,24 @@
             <input type="checkbox" name="use_supplier_balance">
             Списать с баланса поставщика
           </label>
+        </div>
+      </div>
+
+      <div class="grid-three">
+        <div class="field">
+          <label>Документ выдан</label>
+          <label style="display:flex; align-items:center; gap:10px; font-weight:600;">
+            <input type="checkbox" name="document_issued">
+            Да, документ выдали клиенту
+          </label>
+        </div>
+        <div class="field">
+          <label>Название документа</label>
+          <input name="document_name" placeholder="Счёт, накладная, УПД">
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <div class="panel-note">Процент заработка считается автоматически по закупу и продаже.</div>
         </div>
       </div>
 
@@ -571,7 +799,8 @@
         name: "{{ client.name|e }}",
         phone: "{{ (client.phone or '')|e }}",
         address: "{{ (client.address or '')|e }}",
-        category: "{{ (client.category or '')|e }}"
+        category: "{{ (client.category or '')|e }}",
+        source: "{{ (client.source or '')|e }}"
       }{% if not loop.last %},{% endif %}
     {% endfor %}
   ];
@@ -592,9 +821,7 @@
 
   function openOrderModal() {
     document.getElementById('order-modal').classList.remove('hidden');
-    if (!document.querySelector('.item-row')) {
-      addOrderItemRow();
-    }
+    if (!document.querySelector('.item-row')) addOrderItemRow();
   }
 
   function closeOrderModal() {
@@ -605,9 +832,17 @@
     return document.getElementById('pricing_tier_select').value || 'retail';
   }
 
+  function adjustedPrice(base, factor) {
+    const value = Number(base || 0) * factor;
+    return value.toFixed(2);
+  }
+
   function priceForTier(product, tier) {
     if (tier === 'small_opt') return product.small_opt;
     if (tier === 'large_opt') return product.large_opt;
+    if (tier === 'small_opt_non_cash') return adjustedPrice(product.small_opt, 1.06);
+    if (tier === 'medium_opt_non_cash') return adjustedPrice(product.retail, 1.02);
+    if (tier === 'large_opt_non_cash') return adjustedPrice(product.large_opt, 0.97);
     return product.retail;
   }
 
@@ -616,13 +851,13 @@
     const phoneInput = document.getElementById('client_phone_input');
     const addressInput = document.getElementById('client_address_input');
     const categoryInput = document.getElementById('client_category_input');
-
+    const sourceInput = document.getElementById('client_source_input');
     const found = CLIENTS.find(item => item.name.toLowerCase() === clientName);
     if (!found) return;
-
     if (!phoneInput.value) phoneInput.value = found.phone || '';
     if (!addressInput.value) addressInput.value = found.address || '';
     if (!categoryInput.value && found.category) categoryInput.value = found.category;
+    if (!sourceInput.value && found.source) sourceInput.value = found.source;
   }
 
   function markManualPrice(input) {
@@ -631,7 +866,6 @@
 
   function addOrderItemRow() {
     const container = document.getElementById('items-list');
-
     const row = document.createElement('div');
     row.className = 'item-row';
     row.innerHTML = `
@@ -641,23 +875,19 @@
         <input type="hidden" name="product_ids" value="">
         <div class="item-row-meta js-row-meta">Выбери товар из номенклатуры</div>
       </div>
-
       <div class="field">
         <label>Количество</label>
         <input type="number" step="0.01" min="0.01" name="quantities" value="1">
       </div>
-
       <div class="field">
         <label>Цена продажи</label>
         <input type="number" step="0.01" min="0" name="sale_prices" value="0" data-manual="0" oninput="markManualPrice(this)">
       </div>
-
       <div class="field">
         <label>&nbsp;</label>
         <button type="button" class="btn btn-light remove-row-btn" onclick="this.closest('.item-row').remove()">Убрать</button>
       </div>
     `;
-
     container.appendChild(row);
   }
 
@@ -667,18 +897,14 @@
     const meta = row.querySelector('.js-row-meta');
     const saleInput = row.querySelector('input[name="sale_prices"]');
     const value = input.value.trim().toLowerCase();
-
     const product = PRODUCTS.find(item => item.name.toLowerCase() === value);
-
     if (!product) {
       hidden.value = '';
       meta.textContent = 'Товар не выбран из номенклатуры';
       return;
     }
-
     hidden.value = product.id;
     meta.textContent = `Закуп: ${product.purchase} ₽ • Ед.: ${product.unit}`;
-
     if (saleInput.dataset.manual !== '1' || !saleInput.value || Number(saleInput.value) === 0) {
       saleInput.value = priceForTier(product, currentTier());
       saleInput.dataset.manual = '0';
@@ -691,36 +917,26 @@
       const saleInput = row.querySelector('input[name="sale_prices"]');
       const value = nameInput.value.trim().toLowerCase();
       const product = PRODUCTS.find(item => item.name.toLowerCase() === value);
-
-      if (!product) return;
-      if (saleInput.dataset.manual === '1') return;
-
+      if (!product || saleInput.dataset.manual === '1') return;
       saleInput.value = priceForTier(product, currentTier());
     });
   }
 
   function validateOrderForm() {
-    const selectedProducts = [...document.querySelectorAll('input[name="product_ids"]')]
-      .filter(item => item.value.trim());
-
+    const selectedProducts = [...document.querySelectorAll('input[name="product_ids"]')].filter(item => item.value.trim());
     if (!selectedProducts.length) {
       alert('Добавь хотя бы один товар из номенклатуры.');
       return false;
     }
-
     return true;
   }
 
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') {
-      closeOrderModal();
-    }
+    if (e.key === 'Escape') closeOrderModal();
   });
 
   document.getElementById('order-modal').addEventListener('click', function (e) {
-    if (e.target.id === 'order-modal') {
-      closeOrderModal();
-    }
+    if (e.target.id === 'order-modal') closeOrderModal();
   });
 </script>
 {% endblock %}

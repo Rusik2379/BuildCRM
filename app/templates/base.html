@@ -14,19 +14,34 @@
         <div class="brand-badge">BC</div>
         <div>
           <div class="brand-title">BuildCRM</div>
-          <div class="brand-subtitle">Управление продажами</div>
+          <div class="brand-subtitle">Панель управления</div>
         </div>
       </div>
 
       <nav class="sidebar-nav">
-        <a href="/dashboard" class="{% if current == '/dashboard' %}active{% endif %}">Дашборд</a>
-        <a href="/orders/retail" class="{% if current == '/orders/retail' %}active{% endif %}">Заявки розница</a>
-        <a href="/orders/wholesale" class="{% if current == '/orders/wholesale' %}active{% endif %}">Заявки опт</a>
-        <a href="/clients" class="{% if current.startswith('/clients') %}active{% endif %}">Клиенты</a>
+        <a href="/dashboard" class="{% if current == '/dashboard' %}active{% endif %}">Панель управления</a>
+
+        <details class="sidebar-group" {% if current.startswith('/orders') %}open{% endif %}>
+          <summary class="sidebar-group-toggle">Заявки</summary>
+          <div class="sidebar-subnav">
+            <a href="/orders/retail" class="{% if current == '/orders/retail' %}active{% endif %}">Розничные заявки</a>
+            <a href="/orders/wholesale" class="{% if current == '/orders/wholesale' %}active{% endif %}">Оптовые заявки</a>
+          </div>
+        </details>
+
+        <details class="sidebar-group" {% if current.startswith('/clients') %}open{% endif %}>
+          <summary class="sidebar-group-toggle">Клиентская база</summary>
+          <div class="sidebar-subnav">
+            <a href="/clients?client_type=retail" class="{% if current.startswith('/clients') and request.query_params.get('client_type') == 'retail' %}active{% endif %}">Розничные клиенты</a>
+            <a href="/clients?client_type=wholesale" class="{% if current.startswith('/clients') and request.query_params.get('client_type') == 'wholesale' %}active{% endif %}">Оптовые клиенты</a>
+            <a href="/clients" class="{% if current.startswith('/clients') and not request.query_params.get('client_type') and current == '/clients' %}active{% endif %}">Все клиенты</a>
+          </div>
+        </details>
+
         <a href="/products" class="{% if current == '/products' %}active{% endif %}">Номенклатура</a>
-        <a href="/stock" class="{% if current == '/stock' %}active{% endif %}">Склад</a>
-        <a href="/suppliers" class="{% if current == '/suppliers' %}active{% endif %}">Поставщики</a>
-        <a href="/drivers" class="{% if current == '/drivers' %}active{% endif %}">Водители</a>
+        <a href="/stock" class="{% if current == '/stock' %}active{% endif %}">Складской учёт</a>
+        <a href="/suppliers" class="{% if current == '/suppliers' %}active{% endif %}">Поставщики и закупки</a>
+        <a href="/drivers" class="{% if current == '/drivers' %}active{% endif %}">Доставка</a>
         <a href="/finances" class="{% if current == '/finances' %}active{% endif %}">Финансы</a>
         <a href="/documents" class="{% if current == '/documents' %}active{% endif %}">Документы</a>
       </nav>

@@ -306,7 +306,7 @@
             <td>{{ item.supplier.name if item.supplier else (item.product.supplier.name if item.product.supplier else '—') }}</td>
             <td>
               <form method="post" action="/stock/{{ item.id }}/set-quantity" class="qty-form">
-                <input class="stock-int-input" type="number" name="quantity" step="1" min="0" value="{{ (item.quantity or 0)|int }}">
+                <input class="stock-int-input" type="number" name="quantity" step="0.01" min="0" value="{{ '%.2f'|format(item.quantity or 0) }}">
                 <button class="btn btn-light btn-small" type="submit">Сохранить</button>
               </form>
             </td>
@@ -399,7 +399,7 @@
       <div class="grid-two">
         <div class="field">
           <label>Остаток</label>
-          <input class="stock-int-input" type="number" name="quantity" step="1" min="0" value="0">
+          <input class="stock-int-input" type="number" name="quantity" step="0.01" min="0" value="0">
         </div>
 
         <div class="field">

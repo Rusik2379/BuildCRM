@@ -9,6 +9,7 @@ from app.models import (
     Client,
     Driver,
     DriverCashMovement,
+    GeneralExpense,
     Order,
     OrderItem,
     Product,
@@ -16,6 +17,13 @@ from app.models import (
     Supplier,
     SupplierBalanceMovement,
 )
+
+
+PRICE_ADJUSTMENTS = {
+    'small_opt_non_cash': Decimal('0.06'),
+    'medium_opt_non_cash': Decimal('0.02'),
+    'large_opt_non_cash': Decimal('-0.03'),
+}
 
 
 def to_decimal(value: str | float | int | Decimal | None, default: str = '0') -> Decimal:
@@ -87,12 +95,38 @@ def find_or_create_product(db: Session, name: str, category: str = '', unit: str
     return product
 
 
-def product_price_for_tier(product: Product, tier: str) -> Decimal:
-    if tier == 'small_opt':
+def base_product_price_for_tier(product: Product, tier: str) -> Decimal:
+    if tier in {'small_opt', 'small_opt_non_cash'}:
         return Decimal(product.small_opt_price or 0)
-    if tier == 'large_opt':
+    if tier in {'large_opt', 'large_opt_non_cash'}:
         return Decimal(product.large_opt_price or 0)
+    if tier == 'medium_opt_non_cash':
+        return Decimal(product.retail_price or 0)
     return Decimal(product.retail_price or 0)
+
+
+def product_price_for_tier(product: Product, tier: str) -> Decimal:
+    base_price = base_product_price_for_tier(product, tier)
+    adjustment = PRICE_ADJUSTMENTS.get(tier, Decimal('0'))
+    adjusted = base_price * (Decimal('1') + adjustment)
+    if adjusted < 0:
+        adjusted = Decimal('0')
+    return adjusted.quantize(Decimal('0.01'))
+
+
+def normalize_payment_method(payment_method: str) -> str:
+    mapping = {
+        'cash': 'cash_us',
+        'transfer': 'transfer_us',
+        'card': 'transfer_us',
+        'driver_payment': 'cash_driver',
+        'invoice_no_vat': 'invoice_no_vat',
+        'cash_us': 'cash_us',
+        'transfer_us': 'transfer_us',
+        'cash_driver': 'cash_driver',
+        'transfer_supplier': 'transfer_supplier',
+    }
+    return mapping.get((payment_method or '').strip(), 'cash_us')
 
 
 def recalculate_order(order: Order) -> None:
@@ -102,6 +136,10 @@ def recalculate_order(order: Order) -> None:
     order.total_purchase = purchase
     order.total_revenue = sale + Decimal(order.delivery_cost or 0)
     order.total_profit = order.total_revenue - purchase - Decimal(order.additional_costs or 0)
+    if purchase > 0:
+        order.markup_percent = ((order.total_profit / purchase) * Decimal('100')).quantize(Decimal('0.01'))
+    else:
+        order.markup_percent = Decimal('0')
 
 
 def create_order(
@@ -111,6 +149,7 @@ def create_order(
     client_name: str,
     client_phone: str,
     client_address: str,
+    client_source: str,
     client_category: str,
     product_ids: list[str],
     quantities: list[str],
@@ -125,13 +164,16 @@ def create_order(
     supplier_id: str,
     driver_id: str,
     use_supplier_balance: bool,
+    document_issued: bool = False,
+    document_name: str = '',
 ) -> Order:
+    normalized_payment_method = normalize_payment_method(payment_method)
     client = find_or_create_client(
         db,
         client_name,
         client_phone,
         client_address,
-        source='',
+        source=client_source,
         category=client_category,
         client_type='wholesale' if kind == 'wholesale' else 'retail',
     )
@@ -139,7 +181,7 @@ def create_order(
     order = Order(
         kind=kind,
         status=status,
-        payment_method=payment_method,
+        payment_method=normalized_payment_method,
         delivery_type=delivery_type,
         delivery_cost=to_decimal(delivery_cost),
         additional_costs=to_decimal(additional_costs),
@@ -148,6 +190,9 @@ def create_order(
         supplier_id=int(supplier_id) if supplier_id else None,
         driver_id=int(driver_id) if driver_id else None,
         use_supplier_balance=bool(use_supplier_balance),
+        client_source_snapshot=client_source.strip() or client.source,
+        document_issued=bool(document_issued),
+        document_name=document_name.strip() or None,
     )
     db.add(order)
     db.flush()
@@ -171,7 +216,6 @@ def create_order(
             continue
 
         purchase_price = Decimal(product.purchase_price or 0)
-
         fallback_sale = product_price_for_tier(product, pricing_tier)
         sale_price = to_decimal(sale_raw, str(fallback_sale))
         if sale_price < 0:
@@ -209,7 +253,7 @@ def create_order(
                 )
             )
 
-    if order.payment_method == 'driver_payment' and order.driver_id:
+    if order.payment_method == 'cash_driver' and order.driver_id:
         driver = db.get(Driver, order.driver_id)
         if driver:
             delta = Decimal(order.total_revenue or 0)
@@ -271,6 +315,7 @@ def dashboard_stats(db: Session) -> dict:
     wholesale_orders = db.scalar(select(func.count(Order.id)).where(Order.kind == 'wholesale')) or 0
     revenue = db.scalar(select(func.coalesce(func.sum(Order.total_revenue), 0))) or 0
     profit = db.scalar(select(func.coalesce(func.sum(Order.total_profit), 0))) or 0
+    general_expenses = db.scalar(select(func.coalesce(func.sum(GeneralExpense.amount), 0))) or 0
 
     return {
         'total_clients': total_clients,
@@ -282,6 +327,7 @@ def dashboard_stats(db: Session) -> dict:
         'wholesale_orders': wholesale_orders,
         'revenue': float(revenue),
         'profit': float(profit),
+        'general_expenses': float(general_expenses),
     }
 
 
